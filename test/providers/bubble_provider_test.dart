@@ -115,5 +115,18 @@ void main() {
       final newVelocities = provider.bubbles.map((b) => (b.vx, b.vy)).toList();
       expect(newVelocities, isNot(equals(originalVelocities)));
     });
+
+    test('calculateRadius handles zero or negative budget limit', () {
+      final provider = BubbleProvider(dbService: mockDb);
+      
+      // Budgeted (ratio 0.5) => 40 + 0.5 * 40 = 60
+      expect(provider.calculateRadius(50.0, 100.0), 60.0);
+
+      // Unbudgeted (limit 0) => base (45.0) + sqrt(50) * 2.0 ≈ 59.14
+      expect(provider.calculateRadius(50.0, 0.0), closeTo(59.14, 0.01));
+
+      // Unbudgeted (limit -1) => base (45.0) + sqrt(100) * 2.0 = 65.0
+      expect(provider.calculateRadius(100.0, -1.0), 65.0);
+    });
   });
 }

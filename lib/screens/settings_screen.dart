@@ -59,6 +59,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (val) => setState(() => _settings.hapticsEnabled = val),
               activeThumbColor: Colors.blueAccent,
             ),
+            SwitchListTile(
+              title: const Text('Show Total Budget Header', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Display total monthly budget progress at the top', style: TextStyle(color: Colors.white54)),
+              value: _settings.showTotalBudgetHeader,
+              onChanged: (val) => setState(() => _settings.setShowTotalBudgetHeader(val)),
+              activeThumbColor: Colors.blueAccent,
+            ),
           ]),
         ],
       ),

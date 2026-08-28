@@ -53,7 +53,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 ),
               ),
               title: Text(cat.categoryName, style: const TextStyle(color: Colors.white)),
-              subtitle: Text('Budget: ${_settings.currencySymbol}${cat.budgetLimit.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white70)),
+              subtitle: Text(
+                cat.budgetLimit > 0
+                    ? 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)} / ${_settings.currencySymbol}${cat.budgetLimit.toStringAsFixed(2)}'
+                    : 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white70),
+              ),
               trailing: const Icon(Icons.chevron_right, color: Colors.white54),
               onTap: () => _showCategoryDialog(bubble: cat),
             )),
@@ -85,7 +90,13 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
   void _showCategoryDialog({Bubble? bubble}) {
     final nameController = TextEditingController(text: bubble?.categoryName ?? '');
-    final limitController = TextEditingController(text: bubble?.budgetLimit.toString() ?? '');
+    final limitController = TextEditingController(
+      text: (bubble == null || bubble.budgetLimit <= 0)
+          ? ''
+          : (bubble.budgetLimit == bubble.budgetLimit.roundToDouble()
+              ? bubble.budgetLimit.round().toString()
+              : bubble.budgetLimit.toString()),
+    );
     String selectedColor = bubble?.colorHex ?? _colorPalette[0];
 
     showDialog(
@@ -109,7 +120,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     controller: limitController, 
                     keyboardType: TextInputType.number, 
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(labelText: 'Budget Limit', labelStyle: TextStyle(color: Colors.white70)),
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly Budget Limit', 
+                      labelStyle: TextStyle(color: Colors.white70),
+                      helperText: 'Optional — leave blank for open tracking',
+                      helperStyle: TextStyle(color: Colors.white54),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   const Text('Pick Color', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
@@ -154,8 +170,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
             TextButton(
               onPressed: () async {
-                final name = nameController.text;
-                final limit = double.tryParse(limitController.text) ?? 0;
+                final name = nameController.text.trim();
+                final limitText = limitController.text.trim();
+                final limit = limitText.isEmpty ? 0.0 : (double.tryParse(limitText) ?? 0.0);
                 if (name.isNotEmpty) {
                   final provider = context.read<BubbleProvider>();
                   final navigator = Navigator.of(context);

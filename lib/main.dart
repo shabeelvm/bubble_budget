@@ -40,17 +40,23 @@ class BubbleBudgetApp extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
   Widget build(BuildContext context) {
+    final settings = SettingsService();
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
           children: [
-            _buildTopBar(context),
+            if (settings.showTotalBudgetHeader) _buildTopBar(context),
             Expanded(
               child: BubbleCanvas(
                 onBubbleTap: (bubble) {
@@ -94,10 +100,16 @@ class HomeScreen extends StatelessWidget {
             monthYear,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
           ),
-          Text(
-            '${settings.currencySymbol}${provider.totalSpend.toStringAsFixed(0)} / ${provider.totalBudget.toStringAsFixed(0)}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-          ),
+          if (provider.totalBudget > 0)
+            Text(
+              '${settings.currencySymbol}${provider.totalSpend.toStringAsFixed(0)} / ${provider.totalBudget.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+            )
+          else
+            Text(
+              '${settings.currencySymbol}${provider.totalSpend.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+            ),
         ],
       ),
     );
@@ -117,32 +129,44 @@ class HomeScreen extends StatelessWidget {
           children: [
             _DockItem(
               icon: Icons.bar_chart_rounded,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ReportsScreen()),
-              ),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
+                );
+                setState(() {});
+              },
             ),
             _DockCapsule(
               icon: Icons.tune_rounded,
               label: 'Manage Bubbles',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
-              ),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
+                );
+                setState(() {});
+              },
             ),
             _DockItem(
               icon: Icons.receipt_long_rounded,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const HistoryScreen()),
-              ),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                );
+                setState(() {});
+              },
             ),
             _DockItem(
               icon: Icons.settings_outlined,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+                setState(() {});
+              },
             ),
           ],
         ),

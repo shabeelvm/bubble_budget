@@ -15,7 +15,7 @@ class BubbleProvider with ChangeNotifier {
   double get screenHeight => _screenHeight;
 
   double get totalSpend => _bubbles.fold(0, (sum, b) => sum + b.monthlySpend);
-  double get totalBudget => _bubbles.fold(0, (sum, b) => sum + b.budgetLimit);
+  double get totalBudget => _bubbles.where((b) => b.isBudgeted).fold(0, (sum, b) => sum + b.budgetLimit);
 
   BubbleProvider({DBService? dbService}) : _dbService = dbService ?? DBService() {
     loadFromDatabase();
@@ -121,8 +121,14 @@ class BubbleProvider with ChangeNotifier {
 
   /// Calculates dynamic radius based on spend vs limit.
   /// Minimum radius is 40.0 (for tap accuracy), scaling up to a maximum cap of 85.0.
+  /// If limit is 0 (unbudgeted), radius is scaled relative to the spending (base 45 + sqrt(spend) * 2).
   double calculateRadius(double spend, double limit) {
-    if (limit <= 0) return 40.0;
+    if (limit <= 0) {
+      // Unbudgeted/Flexible scaling logic:
+      final radius = 45.0 + math.sqrt(spend) * 2.0; 
+      return radius.clamp(45.0, 85.0);
+    }
+    
     final ratio = spend / limit;
     final radius = 40.0 + (ratio * 40.0);
     return radius.clamp(40.0, 85.0);

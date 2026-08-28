@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/bubble.dart';
 import '../providers/bubble_provider.dart';
 import '../services/audio_service.dart';
+import '../services/settings_service.dart';
 
 class BubbleCanvas extends StatefulWidget {
   final Function(Bubble) onBubbleTap;
@@ -231,8 +232,11 @@ class BubblePainter extends CustomPainter {
       center - Offset(textPainter.width / 2, textPainter.height),
     );
 
+    final settings = SettingsService();
     textPainter.text = TextSpan(
-      text: '${bubble.monthlySpend.toStringAsFixed(0)} / ${bubble.budgetLimit.toStringAsFixed(0)}',
+      text: bubble.isBudgeted 
+        ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(2)}'
+        : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)}',
       style: TextStyle(
         color: Colors.white.withAlpha(230),
         fontSize: (currentRadius / 5.5).clamp(9, 13),

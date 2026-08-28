@@ -26,4 +26,11 @@ class SettingsService {
 
   bool get hapticsEnabled => _prefs.getBool('hapticsEnabled') ?? true;
   set hapticsEnabled(bool value) => _prefs.setBool('hapticsEnabled', value);
+
+  bool get showTotalBudgetHeader => _prefs.getBool('showTotalBudgetHeader') ?? false;
+  set showTotalBudgetHeader(bool value) => _prefs.setBool('showTotalBudgetHeader', value);
+
+  void setShowTotalBudgetHeader(bool value) {
+    showTotalBudgetHeader = value;
+  }
 }

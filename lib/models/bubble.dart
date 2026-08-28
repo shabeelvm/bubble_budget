@@ -28,6 +28,8 @@ class Bubble {
   /// Calculates the progress of budget spent (0.0 to 1.0 or more).
   double get spendRatio => budgetLimit > 0 ? monthlySpend / budgetLimit : 0.0;
 
+  bool get isBudgeted => budgetLimit > 0;
+
   /// Creates a copy of this Bubble but with the given fields replaced with the new values.
   Bubble copyWith({
     String? id,
