@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/db_service.dart';
+import '../constants/apps_script_template.dart';
 
 class GoogleSheetsSyncScreen extends StatefulWidget {
   const GoogleSheetsSyncScreen({super.key});
@@ -37,11 +38,7 @@ class _GoogleSheetsSyncScreenState extends State<GoogleSheetsSyncScreen> {
     }
   }
 
-  Future<String> _loadScriptCode() async {
-    return await rootBundle.loadString('assets/scripts/google_apps_script.js');
-  }
-
-  String _getSetupGuide(String scriptCode) {
+  String _getSetupGuide() {
     return '''
 Bubble Budget — Google Sheets Setup Kit
 
@@ -53,19 +50,19 @@ Bubble Budget — Google Sheets Setup Kit
 6. Copy the Web App URL and paste it into the Bubble Budget app.
 
 --- APPS SCRIPT CODE ---
-$scriptCode
+$kAppsScriptCode
 ''';
   }
 
   Future<void> _emailSetupKit() async {
-    final scriptCode = await _loadScriptCode();
-    final guide = _getSetupGuide(scriptCode);
+    final guide = _getSetupGuide();
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
-      query: _encodeQueryParameters({
+      path: '',
+      queryParameters: {
         'subject': 'Bubble Budget — Google Sheets Setup Kit',
         'body': guide,
-      }),
+      },
     );
     
     if (await canLaunchUrl(emailLaunchUri)) {
@@ -75,21 +72,13 @@ $scriptCode
     }
   }
 
-  String? _encodeQueryParameters(Map<String, String> params) {
-    return params.entries
-        .map((e) => '\${Uri.encodeComponent(e.key)}=\${Uri.encodeComponent(e.value)}')
-        .join('&');
-  }
-
   Future<void> _copyScriptCode() async {
-    final scriptCode = await _loadScriptCode();
-    await Clipboard.setData(ClipboardData(text: scriptCode));
-    _showSnackbar('Script code copied to clipboard!');
+    await Clipboard.setData(const ClipboardData(text: kAppsScriptCode));
+    _showSnackbar('Apps Script code copied to clipboard!');
   }
 
   Future<void> _shareSetupKit() async {
-    final scriptCode = await _loadScriptCode();
-    final guide = _getSetupGuide(scriptCode);
+    final guide = _getSetupGuide();
     await Share.share(guide, subject: 'Bubble Budget Setup Kit');
   }
 
@@ -193,7 +182,7 @@ $scriptCode
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Pending Records', style: TextStyle(color: Colors.white)),
-                  Text('\$_pendingCount', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text('$_pendingCount', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
                 ],
               ),
               const SizedBox(height: 16),

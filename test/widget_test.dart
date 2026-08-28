@@ -7,7 +7,6 @@ import 'package:bubble_budget/widgets/bubble_canvas.dart';
 import 'package:bubble_budget/providers/bubble_provider.dart';
 import 'package:bubble_budget/services/db_service.dart';
 import 'package:bubble_budget/services/settings_service.dart';
-import 'package:bubble_budget/screens/google_sheets_sync_screen.dart';
 
 class MockDBService implements DBService {
   @override

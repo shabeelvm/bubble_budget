@@ -46,7 +46,7 @@ class SyncService {
         return true;
       }
     } catch (e) {
-      print('Sync error: $e');
+      // Sync failed (offline or invalid URL)
     }
     return false;
   }
