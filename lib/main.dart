@@ -7,6 +7,7 @@ import 'widgets/quick_entry_modal.dart';
 import 'screens/settings_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/category_screen.dart';
+import 'screens/reports_screen.dart';
 import 'services/settings_service.dart';
 
 void main() async {
@@ -116,14 +117,10 @@ class HomeScreen extends StatelessWidget {
           children: [
             _DockItem(
               icon: Icons.bar_chart_rounded,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Detailed monthly analytics coming soon!'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportsScreen()),
+              ),
             ),
             _DockCapsule(
               icon: Icons.tune_rounded,

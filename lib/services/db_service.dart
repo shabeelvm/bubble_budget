@@ -147,6 +147,74 @@ class DBService {
     });
   }
 
+  Future<List<Map<String, dynamic>>> getCategorySpendingForMonth(int year, int month) async {
+    final db = await database;
+    final startOfMonth = DateTime(year, month, 1).toIso8601String();
+    final endOfMonth = DateTime(year, month + 1, 0, 23, 59, 59).toIso8601String();
+
+    return await db.rawQuery('''
+      SELECT c.name as category_name, SUM(e.amount) as total, COUNT(e.id) as count, c.color_hex
+      FROM expenses e
+      JOIN categories c ON e.category_id = c.id
+      WHERE e.timestamp BETWEEN ? AND ?
+      GROUP BY c.id
+      ORDER BY total DESC
+    ''', [startOfMonth, endOfMonth]);
+  }
+
+  Future<Map<int, double>> getDailySpendingForMonth(int year, int month) async {
+    final db = await database;
+    final startOfMonth = DateTime(year, month, 1).toIso8601String();
+    final endOfMonth = DateTime(year, month + 1, 0, 23, 59, 59).toIso8601String();
+
+    final results = await db.rawQuery('''
+      SELECT strftime('%d', timestamp) as day, SUM(amount) as total
+      FROM expenses
+      WHERE timestamp BETWEEN ? AND ?
+      GROUP BY day
+    ''', [startOfMonth, endOfMonth]);
+
+    final Map<int, double> dailyMap = {};
+    for (var r in results) {
+      dailyMap[int.parse(r['day'] as String)] = (r['total'] as num).toDouble();
+    }
+    return dailyMap;
+  }
+
+  Future<List<Map<String, dynamic>>> getCategorySpendingForYear(int year) async {
+    final db = await database;
+    final startOfYear = DateTime(year, 1, 1).toIso8601String();
+    final endOfYear = DateTime(year, 12, 31, 23, 59, 59).toIso8601String();
+
+    return await db.rawQuery('''
+      SELECT c.name as category_name, SUM(e.amount) as total, COUNT(e.id) as count, c.color_hex
+      FROM expenses e
+      JOIN categories c ON e.category_id = c.id
+      WHERE e.timestamp BETWEEN ? AND ?
+      GROUP BY c.id
+      ORDER BY total DESC
+    ''', [startOfYear, endOfYear]);
+  }
+
+  Future<Map<int, double>> getMonthlySpendingForYear(int year) async {
+    final db = await database;
+    final startOfYear = DateTime(year, 1, 1).toIso8601String();
+    final endOfYear = DateTime(year, 12, 31, 23, 59, 59).toIso8601String();
+
+    final results = await db.rawQuery('''
+      SELECT strftime('%m', timestamp) as month, SUM(amount) as total
+      FROM expenses
+      WHERE timestamp BETWEEN ? AND ?
+      GROUP BY month
+    ''', [startOfYear, endOfYear]);
+
+    final Map<int, double> monthlyMap = {};
+    for (var r in results) {
+      monthlyMap[int.parse(r['month'] as String)] = (r['total'] as num).toDouble();
+    }
+    return monthlyMap;
+  }
+
   Future<int> getCategoryCount() async {
     final db = await database;
     final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM categories'));
