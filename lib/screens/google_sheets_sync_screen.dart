@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
 import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/db_service.dart';
+import '../services/audio_service.dart';
 import '../constants/apps_script_template.dart';
+import '../widgets/sheet_setup_guide_dialog.dart';
 
 class GoogleSheetsSyncScreen extends StatefulWidget {
   const GoogleSheetsSyncScreen({super.key});
@@ -18,16 +21,19 @@ class _GoogleSheetsSyncScreenState extends State<GoogleSheetsSyncScreen> {
   final SettingsService _settings = SettingsService();
   final SyncService _syncService = SyncService();
   final DBService _dbService = DBService();
-  final TextEditingController _webhookController = TextEditingController();
   
-  bool _isTesting = false;
+  final TextEditingController _webhookController = TextEditingController();
+  final TextEditingController _tagController = TextEditingController();
+  
+  bool _isVerifying = false;
   bool _isSyncing = false;
+  bool _isEditing = false;
   int _pendingCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _webhookController.text = _settings.sheetsWebhookUrl;
+    _tagController.text = _settings.sheetTag;
     _updatePendingCount();
   }
 
@@ -56,20 +62,29 @@ $kAppsScriptCode
 
   Future<void> _emailSetupKit() async {
     final guide = _getSetupGuide();
-    final Uri emailLaunchUri = Uri(
-      scheme: 'mailto',
-      path: '',
-      queryParameters: {
-        'subject': 'Bubble Budget — Google Sheets Setup Kit',
-        'body': guide,
-      },
+    final subject = 'Bubble Budget — Google Sheets Setup Kit';
+    
+    String encodeQueryParam(String text) {
+      return Uri.encodeComponent(text).replaceAll('+', '%20');
+    }
+    
+    final Uri emailLaunchUri = Uri.parse(
+      'mailto:?subject=${encodeQueryParam(subject)}&body=${encodeQueryParam(guide)}',
     );
     
-    if (await canLaunchUrl(emailLaunchUri)) {
-      await launchUrl(emailLaunchUri);
-    } else {
-      _showSnackbar('Could not launch email app', isError: true);
-    }
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        final launched = await launchUrl(
+          emailLaunchUri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return;
+      }
+    } catch (_) {}
+
+    // Fallback: copy setup instructions to clipboard
+    await Clipboard.setData(ClipboardData(text: guide));
+    _showSnackbar('Could not launch email app. Instructions copied to clipboard!');
   }
 
   Future<void> _copyScriptCode() async {
@@ -82,15 +97,84 @@ $kAppsScriptCode
     await Share.share(guide, subject: 'Bubble Budget Setup Kit');
   }
 
-  Future<void> _testConnection() async {
-    setState(() => _isTesting = true);
-    final success = await _syncService.testWebhook(_webhookController.text);
+  Future<void> _launchTemplateUrl() async {
+    final Uri url = Uri.parse(kGoogleSheetTemplateUrl);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _verifyAndConnect() async {
+    final url = _webhookController.text.trim();
+    final tag = _tagController.text.trim();
+
+    if (url.isEmpty || tag.isEmpty) {
+      _showSnackbar('Please enter both Webhook URL and Sheet Tag.', isError: true);
+      return;
+    }
+
+    setState(() => _isVerifying = true);
+    final success = await _syncService.verifyAndConnect(url, tag);
     if (!mounted) return;
-    setState(() => _isTesting = false);
-    _showSnackbar(
-      success ? 'Connection Successful!' : 'Connection Failed. Check URL.',
-      isError: !success,
+    setState(() => _isVerifying = false);
+
+    if (success) {
+      final nowStr = DateTime.now().toLocal().toIso8601String();
+      await _settings.saveConnection(
+        url: url,
+        tag: tag,
+        lastVerifiedAt: nowStr,
+      );
+      await AudioService().playSuccess();
+      _showSnackbar('Connection Verified & Connected!');
+      setState(() {
+        _isEditing = false;
+        _webhookController.clear();
+      });
+      await _updatePendingCount();
+    } else {
+      _showSnackbar(
+        'Could not reach endpoint. Please check your deployment URL and permissions.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _confirmDisconnect() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disconnect Google Sheets?'),
+        content: const Text(
+          'Are you sure you want to disconnect? This will permanently erase your secure credentials from device storage.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
     );
+
+    if (confirm == true) {
+      await _settings.disconnect();
+      _webhookController.clear();
+      _tagController.clear();
+      if (mounted) {
+        setState(() {
+          _isEditing = false;
+        });
+        _showSnackbar('Disconnected successfully.', isError: false);
+      }
+    }
   }
 
   Future<void> _syncPending() async {
@@ -112,10 +196,27 @@ $kAppsScriptCode
     );
   }
 
+  String _formatTimestamp(String isoString) {
+    try {
+      final dateTime = DateTime.parse(isoString);
+      return DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime);
+    } catch (_) {
+      return isoString;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
+    final textSecondary = isDark ? Colors.white70 : const Color(0xFF4B5563);
+    
+    final bool isConnected = _settings.webhookUrl.isNotEmpty;
+    final bool showSetup = !isConnected || _isEditing;
+
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('Google Sheets Sync'),
         backgroundColor: Colors.transparent,
@@ -125,21 +226,32 @@ $kAppsScriptCode
         children: [
           _buildSection('1. Setup Kit', [
             _buildCard([
-              const Text(
+              Text(
                 'Get everything you need to connect your Google Sheets in seconds.',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: textSecondary),
               ),
               const SizedBox(height: 16),
               _buildActionButton(
-                icon: Icons.email_outlined,
-                label: 'Email Setup Kit to Myself',
-                onTap: _emailSetupKit,
+                icon: Icons.map_outlined,
+                label: 'View Setup Walkthrough',
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const SheetSetupGuideDialog(),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _buildActionButton(
                 icon: Icons.copy_rounded,
                 label: 'Copy Script Code',
                 onTap: _copyScriptCode,
+              ),
+              const SizedBox(height: 12),
+              _buildActionButton(
+                icon: Icons.email_outlined,
+                label: 'Email Setup Kit to Myself',
+                onTap: _emailSetupKit,
               ),
               const SizedBox(height: 12),
               _buildActionButton(
@@ -151,29 +263,181 @@ $kAppsScriptCode
           ]),
           const SizedBox(height: 24),
           _buildSection('2. Configuration', [
-            TextField(
-              controller: _webhookController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Google Sheets Webhook URL',
-                labelStyle: TextStyle(color: Colors.white70),
-                border: OutlineInputBorder(),
-                hintText: 'https://script.google.com/...',
-              ),
-              onChanged: (value) => _settings.sheetsWebhookUrl = value,
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _isTesting ? null : _testConnection,
-                icon: _isTesting 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.sync_alt),
-                label: Text(_isTesting ? 'Testing...' : 'Test Connection'),
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.blueAccent),
-              ),
-            ),
+            if (showSetup) ...[
+              _buildCard([
+                TextField(
+                  controller: _tagController,
+                  style: TextStyle(color: textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Sheet Tag / Nickname',
+                    labelStyle: TextStyle(color: textSecondary),
+                    helperText: 'Tip: Match this with your Google Sheet file name (e.g., Bubble Budget 2026)',
+                    helperStyle: TextStyle(color: textSecondary.withOpacity(0.7)),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _webhookController,
+                  style: TextStyle(color: textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Google Sheets Webhook URL',
+                    labelStyle: TextStyle(color: textSecondary),
+                    hintText: 'https://script.google.com/macros/s/...',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isVerifying ? null : _verifyAndConnect,
+                    icon: _isVerifying 
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.flash_on),
+                    label: Text(_isVerifying ? 'Verifying...' : 'Verify & Connect'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                if (_isEditing) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = false;
+                          _webhookController.clear();
+                          _tagController.text = _settings.sheetTag;
+                        });
+                      },
+                      child: Text('Cancel', style: TextStyle(color: textSecondary)),
+                    ),
+                  ),
+                ],
+              ]),
+            ] else ...[
+              _buildCard([
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _settings.sheetTag.isNotEmpty ? _settings.sheetTag : 'Connected Sheet',
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Webhook: ••••••••••••••••',
+                            style: TextStyle(color: textSecondary, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.withOpacity(0.5)),
+                      ),
+                      child: const Text(
+                        'Connected',
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_settings.webhookLastVerifiedAt.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Last verified: ${_formatTimestamp(_settings.webhookLastVerifiedAt)}',
+                    style: TextStyle(
+                      color: textSecondary.withOpacity(0.6),
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => const SheetSetupGuideDialog(),
+                        );
+                      },
+                      icon: const Icon(Icons.help_outline, size: 16),
+                      label: const Text('Instructions'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
+                    ),
+                    TextButton.icon(
+                      onPressed: _launchTemplateUrl,
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('Sheet Template'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isEditing = true;
+                            _tagController.text = _settings.sheetTag;
+                            _webhookController.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Update Webhook'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blueAccent,
+                          side: const BorderSide(color: Colors.blueAccent),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _confirmDisconnect,
+                        icon: const Icon(Icons.power_settings_new_rounded, size: 16),
+                        label: const Text('Disconnect'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ]),
+            ],
           ]),
           const SizedBox(height: 24),
           _buildSection('3. Maintenance', [
@@ -181,15 +445,22 @@ $kAppsScriptCode
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Pending Records', style: TextStyle(color: Colors.white)),
-                  Text('$_pendingCount', style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text('Pending Records', style: TextStyle(color: textPrimary)),
+                  Text(
+                    '$_pendingCount',
+                    style: TextStyle(
+                      color: _pendingCount > 0 ? Colors.orangeAccent : Colors.blueAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: (_isSyncing || _pendingCount == 0) ? null : _syncPending,
+                  onPressed: (!isConnected || _isSyncing || _pendingCount == 0) ? null : _syncPending,
                   icon: _isSyncing 
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.cloud_upload_outlined),
@@ -197,9 +468,20 @@ $kAppsScriptCode
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFE5E7EB),
+                    disabledForegroundColor: isDark ? Colors.white24 : Colors.black26,
                   ),
                 ),
               ),
+              if (!isConnected) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    'Connect Google Sheets to enable syncing.',
+                    style: TextStyle(color: textSecondary.withOpacity(0.5), fontSize: 12),
+                  ),
+                ),
+              ],
             ]),
           ]),
         ],
@@ -219,12 +501,21 @@ $kAppsScriptCode
   }
 
   Widget _buildCard(List<Widget> children) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(10),
+        color: isDark ? Colors.white.withAlpha(10) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(10)),
+        border: Border.all(color: isDark ? Colors.white.withAlpha(10) : const Color(0xFFE5E7EB)),
+        boxShadow: isDark ? [] : [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,21 +525,26 @@ $kAppsScriptCode
   }
 
   Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
+    final textSecondary = isDark ? Colors.white54 : const Color(0xFF6B7280);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(5),
+          color: isDark ? Colors.white.withAlpha(5) : const Color(0xFFF9FAFB),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withAlpha(5)),
+          border: Border.all(color: isDark ? Colors.white.withAlpha(5) : const Color(0xFFF3F4F6)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white70, size: 20),
+            Icon(icon, color: textSecondary, size: 20),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+            Text(label, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w500)),
           ],
         ),
       ),

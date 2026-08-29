@@ -9,6 +9,9 @@ import 'screens/history_screen.dart';
 import 'screens/category_screen.dart';
 import 'screens/reports_screen.dart';
 import 'services/settings_service.dart';
+import 'widgets/privacy_consent_dialog.dart';
+import 'services/analytics_service.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,17 +27,17 @@ class BubbleBudgetApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => provider ?? BubbleProvider(),
-      child: MaterialApp(
-        title: 'Bubble Budget',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
-        home: const HomeScreen(),
+      child: Consumer<BubbleProvider>(
+        builder: (context, bubbleProvider, _) {
+          return MaterialApp(
+            title: 'Bubble Budget',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: bubbleProvider.themeMode,
+            home: const HomeScreen(),
+          );
+        },
       ),
     );
   }
@@ -48,6 +51,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPrivacyConsent();
+    });
+  }
+
+  void _checkPrivacyConsent() {
+    final settings = SettingsService();
+    if (!settings.hasAcceptedPrivacy) {
+      PrivacyConsentDialog.show(context, onAccepted: () {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+    } else {
+      AnalyticsService().logEvent('app_opened');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService();

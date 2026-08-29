@@ -1,8 +1,10 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/bubble.dart';
 import '../services/db_service.dart';
 import '../services/sync_service.dart';
+import '../services/audio_service.dart';
+import '../services/settings_service.dart';
 
 class BubbleProvider with ChangeNotifier {
   List<Bubble> _bubbles = [];
@@ -13,6 +15,36 @@ class BubbleProvider with ChangeNotifier {
   List<Bubble> get bubbles => _bubbles;
   double get screenWidth => _screenWidth;
   double get screenHeight => _screenHeight;
+
+  ThemeMode get themeMode {
+    final str = SettingsService().themeModeStr;
+    switch (str) {
+      case 'light':
+        return ThemeMode.light;
+      case 'system':
+        return ThemeMode.system;
+      case 'dark':
+      default:
+        return ThemeMode.dark;
+    }
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    String str;
+    switch (mode) {
+      case ThemeMode.light:
+        str = 'light';
+        break;
+      case ThemeMode.system:
+        str = 'system';
+        break;
+      case ThemeMode.dark:
+        str = 'dark';
+        break;
+    }
+    SettingsService().themeModeStr = str;
+    notifyListeners();
+  }
 
   double get totalSpend => _bubbles.fold(0, (sum, b) => sum + b.monthlySpend);
   double get totalBudget => _bubbles.where((b) => b.isBudgeted).fold(0, (sum, b) => sum + b.budgetLimit);
@@ -263,6 +295,13 @@ class BubbleProvider with ChangeNotifier {
             final double dvx = b1.vx - b2.vx;
             final double dvy = b1.vy - b2.vy;
             final double relativeVelocityNormal = dvx * nx + dvy * ny;
+
+            if (relativeVelocityNormal > 120.0) {
+              // Smooth linear mapping from speed [120, 600] to volume [0.10, 0.25]
+              final double normalizedSpeed = (relativeVelocityNormal - 120.0) / 480.0;
+              final double volume = (0.10 + normalizedSpeed * 0.15).clamp(0.10, 0.25);
+              AudioService().playChime(volume: volume);
+            }
 
             if (relativeVelocityNormal > 0 && !b1.isDragged && !b2.isDragged) {
               final double impulse = (1.0 + elasticity) * relativeVelocityNormal / 2.0;

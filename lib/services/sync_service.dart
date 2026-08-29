@@ -64,4 +64,34 @@ class SyncService {
       return false;
     }
   }
+
+  // Mandatory Verification Contract ("Verify & Connect")
+  Future<bool> verifyAndConnect(String url, String sheetTag) async {
+    if (url.isEmpty || sheetTag.isEmpty) return false;
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'action': 'ping',
+          'client': 'bubble_budget',
+          'version': '1.0.0',
+          'sheetTag': sheetTag,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final bodyJson = jsonDecode(response.body);
+        if (bodyJson is Map &&
+            bodyJson['status'] == 'success' &&
+            bodyJson['message'] == 'pong') {
+          return true;
+        }
+      }
+    } catch (_) {
+      // Zero plaintext logging of the webhook URL
+    }
+    return false;
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/db_service.dart';
 import '../services/settings_service.dart';
+import '../widgets/category_donut_chart.dart';
 
 enum ReportPeriod { monthly, yearly }
 
@@ -12,6 +13,20 @@ class ReportsScreen extends StatefulWidget {
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
+class _SettingsColors {
+  final Color cardBg;
+  final Color textPrimary;
+  final Color textSecondary;
+  final BoxBorder? border;
+
+  _SettingsColors({
+    required this.cardBg,
+    required this.textPrimary,
+    required this.textSecondary,
+    this.border,
+  });
+}
+
 class _ReportsScreenState extends State<ReportsScreen> {
   final DBService _dbService = DBService();
   final SettingsService _settings = SettingsService();
@@ -19,10 +34,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ReportPeriod _selectedPeriod = ReportPeriod.monthly;
   DateTime _focusedDate = DateTime.now();
 
+  _SettingsColors _getThemeColors(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return _SettingsColors(
+      cardBg: isDark ? Colors.white.withAlpha(12) : Colors.white,
+      textPrimary: isDark ? Colors.white : const Color(0xFF1F2937),
+      textSecondary: isDark ? Colors.white54 : const Color(0xFF6B7280),
+      border: isDark ? null : Border.all(color: const Color(0xFFE5E7EB)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colors = _getThemeColors(context);
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('Analytics'),
         backgroundColor: Colors.transparent,
@@ -30,14 +56,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ),
       body: Column(
         children: [
-          _buildPeriodToggle(),
-          _buildDateSelector(),
+          _buildPeriodToggle(colors),
+          _buildDateSelector(colors),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: _selectedPeriod == ReportPeriod.monthly 
-                ? _buildMonthlyReport() 
-                : _buildYearlyReport(),
+                ? _buildMonthlyReport(colors) 
+                : _buildYearlyReport(colors),
             ),
           ),
         ],
@@ -45,25 +71,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildPeriodToggle() {
+  Widget _buildPeriodToggle(_SettingsColors colors) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(15),
+        color: isDark ? Colors.white.withAlpha(15) : const Color(0xFFE5E7EB),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildToggleButton('Monthly', ReportPeriod.monthly),
-          _buildToggleButton('Yearly', ReportPeriod.yearly),
+          _buildToggleButton('Monthly', ReportPeriod.monthly, colors),
+          _buildToggleButton('Yearly', ReportPeriod.yearly, colors),
         ],
       ),
     );
   }
 
-  Widget _buildToggleButton(String label, ReportPeriod period) {
+  Widget _buildToggleButton(String label, ReportPeriod period, _SettingsColors colors) {
     final isSelected = _selectedPeriod == period;
     return GestureDetector(
       onTap: () => setState(() => _selectedPeriod = period),
@@ -76,7 +104,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white70,
+            color: isSelected ? Colors.white : colors.textSecondary,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -84,7 +112,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildDateSelector() {
+  Widget _buildDateSelector(_SettingsColors colors) {
     final label = _selectedPeriod == ReportPeriod.monthly 
         ? DateFormat('MMMM yyyy').format(_focusedDate)
         : DateFormat('yyyy').format(_focusedDate);
@@ -101,7 +129,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const SizedBox(width: 16),
           Text(
             label,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colors.textPrimary),
           ),
           const SizedBox(width: 16),
           IconButton(
@@ -123,7 +151,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
 
-  Widget _buildMonthlyReport() {
+  Widget _buildMonthlyReport(_SettingsColors colors) {
     return FutureBuilder(
       future: Future.wait([
         _dbService.getCategorySpendingForMonth(_focusedDate.year, _focusedDate.month),
@@ -145,18 +173,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
               _KPI(label: 'Total Spent', value: '${_settings.currencySymbol}${totalSpent.toStringAsFixed(0)}'),
               _KPI(label: 'Daily Avg', value: '${_settings.currencySymbol}${dailyAvg.toStringAsFixed(0)}'),
               _KPI(label: 'Top Cat', value: categoryData.isNotEmpty ? categoryData[0]['category_name'] : '-'),
-            ]),
+            ], colors),
             const SizedBox(height: 24),
-            _buildBarChart(dailyData, daysInMonth, 'Daily Spending'),
+            CategoryDonutChart(categoryData: categoryData),
             const SizedBox(height: 24),
-            _buildCategoryBreakdown(categoryData),
+            _buildBarChart(dailyData, daysInMonth, 'Daily Spending', colors),
+            const SizedBox(height: 24),
+            _buildCategoryBreakdown(categoryData, colors),
           ],
         );
       },
     );
   }
 
-  Widget _buildYearlyReport() {
+  Widget _buildYearlyReport(_SettingsColors colors) {
     return FutureBuilder(
       future: Future.wait([
         _dbService.getCategorySpendingForYear(_focusedDate.year),
@@ -177,18 +207,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
               _KPI(label: 'Annual Total', value: '${_settings.currencySymbol}${totalSpent.toStringAsFixed(0)}'),
               _KPI(label: 'Monthly Avg', value: '${_settings.currencySymbol}${monthlyAvg.toStringAsFixed(0)}'),
               _KPI(label: 'Top Cat', value: categoryData.isNotEmpty ? categoryData[0]['category_name'] : '-'),
-            ]),
+            ], colors),
             const SizedBox(height: 24),
-            _buildBarChart(monthlyData, 12, 'Monthly Trend'),
+            CategoryDonutChart(categoryData: categoryData),
             const SizedBox(height: 24),
-            _buildCategoryBreakdown(categoryData),
+            _buildBarChart(monthlyData, 12, 'Monthly Trend', colors),
+            const SizedBox(height: 24),
+            _buildCategoryBreakdown(categoryData, colors),
           ],
         );
       },
     );
   }
 
-  Widget _buildKPIs(List<_KPI> kpis) {
+  Widget _buildKPIs(List<_KPI> kpis, _SettingsColors colors) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: kpis.map((kpi) => Expanded(
@@ -196,14 +228,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 16),
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(10),
+            color: colors.cardBg,
+            border: colors.border,
             borderRadius: BorderRadius.circular(16),
+            boxShadow: colors.border != null ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              )
+            ] : [],
           ),
           child: Column(
             children: [
-              Text(kpi.label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              Text(kpi.label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
               const SizedBox(height: 4),
-              Text(kpi.value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(kpi.value, style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -211,14 +251,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildBarChart(Map<int, double> data, int itemCount, String title) {
+  Widget _buildBarChart(Map<int, double> data, int itemCount, String title, _SettingsColors colors) {
     final maxVal = data.values.isEmpty ? 1.0 : data.values.reduce((a, b) => a > b ? a : b);
     
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(10),
+        color: colors.cardBg,
+        border: colors.border,
         borderRadius: BorderRadius.circular(20),
+        boxShadow: colors.border != null ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          )
+        ] : [],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,11 +300,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildCategoryBreakdown(List<Map<String, dynamic>> categoryData) {
+  Widget _buildCategoryBreakdown(List<Map<String, dynamic>> categoryData, _SettingsColors colors) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Category Breakdown', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+        Text('Category Breakdown', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 12),
         ...categoryData.map((cat) => ListTile(
           contentPadding: EdgeInsets.zero,
@@ -267,11 +315,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               shape: BoxShape.circle,
             ),
           ),
-          title: Text(cat['category_name'], style: const TextStyle(color: Colors.white)),
-          subtitle: Text('${cat['count']} transactions', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          title: Text(cat['category_name'], style: TextStyle(color: colors.textPrimary)),
+          subtitle: Text('${cat['count']} transactions', style: TextStyle(color: colors.textSecondary, fontSize: 12)),
           trailing: Text(
             '${_settings.currencySymbol}${cat['total'].toStringAsFixed(0)}',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
           ),
         )),
       ],

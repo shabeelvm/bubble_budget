@@ -56,3 +56,5 @@ function doGet(e) {
   return ContentService.createTextOutput("Bubble Budget Webhook Active. Use POST to sync data.");
 }
 ''';
+
+const String kGoogleSheetTemplateUrl = 'https://docs.google.com/spreadsheets/d/1Xl_g4tU2eW7m8pUfQYy6g5R_NfNf8mC87bU9eC1W8o/copy';
