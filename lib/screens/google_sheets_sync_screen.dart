@@ -205,6 +205,17 @@ $kAppsScriptCode
     }
   }
 
+  String _getMaskedUrl(String url) {
+    if (url.isEmpty) return '';
+    if (url.startsWith('https://script.google.com/')) {
+      return 'https://script.google.com/...${'•' * 8}';
+    }
+    if (url.length <= 25) {
+      return '${url.substring(0, url.length ~/ 2)}...${'•' * 8}';
+    }
+    return '${url.substring(0, 25)}...${'•' * 8}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -287,6 +298,11 @@ $kAppsScriptCode
                     border: const OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Note: For security, your Web App URL will be masked after saving. If you need to reconnect or view the URL later, retrieve it from your Google Sheet (Deploy > Manage deployments).',
+                  style: TextStyle(color: textSecondary.withOpacity(0.7), fontSize: 11),
+                ),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -340,7 +356,7 @@ $kAppsScriptCode
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Webhook: ••••••••••••••••',
+                            'Webhook: ${_getMaskedUrl(_settings.webhookUrl)}',
                             style: TextStyle(color: textSecondary, fontSize: 13),
                           ),
                         ],
