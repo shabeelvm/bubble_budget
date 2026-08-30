@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/bubble.dart';
 import '../providers/bubble_provider.dart';
 import '../services/audio_service.dart';
@@ -54,9 +56,9 @@ class _BubbleCanvasState extends State<BubbleCanvas>
       builder: (context, constraints) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           context.read<BubbleProvider>().setScreenSize(
-                constraints.maxWidth,
-                constraints.maxHeight,
-              );
+            constraints.maxWidth,
+            constraints.maxHeight,
+          );
         });
 
         return Consumer<BubbleProvider>(
@@ -79,7 +81,7 @@ class _BubbleCanvasState extends State<BubbleCanvas>
 
   void _handleTap(TapUpDetails details, BubbleProvider provider) {
     if (_draggedBubbleId != null) return;
-    
+
     final tapPos = details.localPosition;
     for (final bubble in provider.bubbles) {
       final dx = tapPos.dx - bubble.x;
@@ -144,22 +146,28 @@ class BubblePainter extends CustomPainter {
       ..sort((a, b) => (a.isDragged ? 1 : 0).compareTo(b.isDragged ? 1 : 0));
 
     for (final bubble in sortedBubbles) {
-      _drawBubble(canvas, bubble);
+      _drawBubble(canvas, bubble, size);
     }
   }
 
-  void _drawBubble(Canvas canvas, Bubble bubble) {
+  void _drawBubble(Canvas canvas, Bubble bubble, Size size) {
     final center = Offset(bubble.x, bubble.y);
     final ratio = bubble.spendRatio;
     final baseColor = _parseHexColor(bubble.colorHex);
-    final currentRadius = bubble.isDragged ? bubble.radius * 1.08 : bubble.radius;
+    final currentRadius = bubble.isDragged
+        ? bubble.radius * 1.08
+        : bubble.radius;
 
     // 0. Shadow lift if dragged
     if (bubble.isDragged) {
       final shadowPaint = Paint()
         ..color = Colors.black.withAlpha(80)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12.0);
-      canvas.drawCircle(center + const Offset(0, 8), currentRadius, shadowPaint);
+      canvas.drawCircle(
+        center + const Offset(0, 8),
+        currentRadius,
+        shadowPaint,
+      );
     }
 
     // 1. Draw elegant outer status rings if needed
@@ -169,7 +177,7 @@ class BubblePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3.0;
       canvas.drawCircle(center, currentRadius + 5, ringPaint);
-      
+
       final glowPaint = Paint()
         ..color = Colors.redAccent.withAlpha(60)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 8.0);
@@ -187,35 +195,73 @@ class BubblePainter extends CustomPainter {
       canvas.drawCircle(center, currentRadius + 4, glowPaint);
     }
 
-    // 2. Main Bubble Body with Gradient
-    final gradient = RadialGradient(
+    // Dynamic Point-Light Source (Torch at Top-Left)
+    final lightSource = Offset(size.width * 0.12, size.height * 0.04);
+    final toLight = lightSource - center;
+    final distanceToLight = toLight.distance;
+    final dir = distanceToLight > 0.001 ? toLight / distanceToLight : const Offset(0, -1);
+
+    final lightAlignX = (dir.dx * 0.45).clamp(-0.5, 0.5);
+    final lightAlignY = (dir.dy * 0.45).clamp(-0.5, 0.5);
+
+    final maxDistance = size.longestSide > 0 ? size.longestSide : 800.0;
+    final proximityFactor = (1.0 - (distanceToLight / maxDistance).clamp(0.0, 1.0));
+    final sheenStrength = 0.20 + (proximityFactor * 0.15);
+
+    // 2a. Seamless Volumetric Gradient (No hard circles or disc artifacts)
+    final bodyGradient = RadialGradient(
+      center: Alignment(lightAlignX, lightAlignY),
+      radius:
+          1.15, // Smoothly spans past the edge for a feathered organic falloff
       colors: [
-        baseColor.withAlpha(200),
-        baseColor,
+        Color.lerp(
+          baseColor,
+          Colors.white,
+          sheenStrength,
+        )!, // Soft subtle sheen facing the torch
+        baseColor.withAlpha(235), // Base sphere body
+        Color.lerp(
+          baseColor,
+          Colors.black,
+          0.25,
+        )!, // Deep shadow on opposite side
       ],
-      stops: const [0.5, 1.0],
+      stops: const [0.0, 0.55, 1.0],
     );
 
     final paint = Paint()
-      ..shader = gradient.createShader(
+      ..shader = bodyGradient.createShader(
         Rect.fromCircle(center: center, radius: currentRadius),
       );
-
     canvas.drawCircle(center, currentRadius, paint);
-    
-    final rimPaint = Paint()
-      ..color = Colors.white.withAlpha(30)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, currentRadius - 1, rimPaint);
 
+    // 2b. Dynamic Glass Rim Highlight (Brighter edge facing the torch)
+    final rimPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment(dir.dx, dir.dy),
+        end: Alignment(-dir.dx, -dir.dy),
+        colors: [
+          Colors.white.withAlpha(
+            (40 + proximityFactor * 40).toInt(),
+          ), // Catch light facing torch
+          Colors.white.withAlpha(10), // Faint ambient edge on shadow side
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: currentRadius))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    canvas.drawCircle(center, currentRadius - 0.5, rimPaint);
     // 3. Category Text
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.center,
     );
 
-    const shadow = Shadow(blurRadius: 4.0, color: Colors.black54, offset: Offset(1, 1));
+    const shadow = Shadow(
+      blurRadius: 4.0,
+      color: Colors.black54,
+      offset: Offset(1, 1),
+    );
 
     textPainter.text = TextSpan(
       text: bubble.categoryName,
@@ -234,9 +280,9 @@ class BubblePainter extends CustomPainter {
 
     final settings = SettingsService();
     textPainter.text = TextSpan(
-      text: bubble.isBudgeted 
-        ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(2)}'
-        : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)}',
+      text: bubble.isBudgeted
+          ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(2)}'
+          : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)}',
       style: TextStyle(
         color: Colors.white.withAlpha(230),
         fontSize: (currentRadius / 5.5).clamp(9, 13),
@@ -245,10 +291,7 @@ class BubblePainter extends CustomPainter {
       ),
     );
     textPainter.layout(maxWidth: currentRadius * 1.8);
-    textPainter.paint(
-      canvas,
-      center + Offset(-textPainter.width / 2, 4),
-    );
+    textPainter.paint(canvas, center + Offset(-textPainter.width / 2, 4));
   }
 
   Color _parseHexColor(String hex) {
