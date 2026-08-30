@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../providers/bubble_provider.dart';
 import '../services/settings_service.dart';
 import '../services/export_service.dart';
-import '../services/analytics_service.dart';
 import 'google_sheets_sync_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -88,21 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeThumbColor: Colors.blueAccent,
             ),
           ]),
-          const SizedBox(height: 24),
-          _buildSection('Data & Privacy', [
-            SwitchListTile(
-              title: const Text('Share Anonymous Analytics'),
-              subtitle: const Text('Help us improve the app by sharing anonymous usage telemetry'),
-              value: _settings.shareAnalytics,
-              onChanged: (val) {
-                setState(() => _settings.shareAnalytics = val);
-                AnalyticsService().logEvent('settings_analytics_toggled', properties: {
-                  'enabled': val,
-                });
-              },
-              activeThumbColor: Colors.blueAccent,
-            ),
-          ]),
+
         ],
       ),
     );

@@ -1,10 +1,8 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'settings_service.dart';
 
 class AnalyticsService {
   static final AnalyticsService _instance = AnalyticsService._internal();
-  final SettingsService _settings = SettingsService();
   late final String _sessionUuid;
 
   factory AnalyticsService() => _instance;
@@ -48,11 +46,6 @@ class AnalyticsService {
   void logEvent(String eventName, {Map<String, dynamic>? properties}) {
     if (!isTelemetryEnabled) {
       // Dormant/Parked: Zero telemetry event logging occurs.
-      return;
-    }
-
-    if (!_settings.shareAnalytics) {
-      debugPrint('[Analytics] Dropping event "$eventName" (analytics disabled)');
       return;
     }
 

@@ -127,9 +127,6 @@ class SettingsService {
     showTotalBudgetHeader = value;
   }
 
-  bool get shareAnalytics => _prefs.getBool('share_analytics') ?? false;
-  set shareAnalytics(bool value) => _prefs.setBool('share_analytics', value);
-
   bool get hasAcceptedPrivacy => _prefs.getBool('has_accepted_privacy') ?? false;
   set hasAcceptedPrivacy(bool value) => _prefs.setBool('has_accepted_privacy', value);
 
