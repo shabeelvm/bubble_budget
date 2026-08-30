@@ -94,9 +94,9 @@ void main() {
       expect(settings.themeModeStr, 'light');
       expect(provider.themeMode, ThemeMode.light);
 
-      provider.setThemeMode(ThemeMode.system);
-      expect(settings.themeModeStr, 'system');
-      expect(provider.themeMode, ThemeMode.system);
+      provider.setThemeMode(ThemeMode.dark);
+      expect(settings.themeModeStr, 'dark');
+      expect(provider.themeMode, ThemeMode.dark);
     });
   });
 }

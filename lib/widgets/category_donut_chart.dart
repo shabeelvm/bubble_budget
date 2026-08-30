@@ -92,12 +92,21 @@ class _CategoryDonutChartState extends State<CategoryDonutChart> {
       final spend = (item['total'] as num).toDouble();
       final percentage = spend / _totalSpend;
 
-      // Group categories into "Other" if there are more than 5 distinct categories and spend percentage < 5%
-      if (sortedData.length > 5 && percentage < 0.05) {
+      // Group categories into "Other" if there are more than 5 distinct categories, spend percentage < 5%,
+      // AND the category is NOT a core/default category ('Coffee', 'Food & Dining', 'Groceries', 'Transport', 'Subscriptions', 'Dining Out').
+      final name = item['category_name'] as String;
+      final isCoreCategory = name == 'Coffee' ||
+          name == 'Food & Dining' ||
+          name == 'Groceries' ||
+          name == 'Transport' ||
+          name == 'Subscriptions' ||
+          name == 'Dining Out';
+
+      if (sortedData.length > 5 && percentage < 0.05 && !isCoreCategory) {
         otherSpend += spend;
       } else {
         prepared.add(_SliceData(
-          name: item['category_name'] as String,
+          name: name,
           amount: spend,
           percentage: percentage,
           colorHex: item['color_hex'] as String? ?? 'FF9E9E9E',

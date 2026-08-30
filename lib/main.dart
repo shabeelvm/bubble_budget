@@ -76,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final settings = SettingsService();
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -110,11 +110,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final settings = SettingsService();
     final now = DateTime.now();
     final monthYear = DateFormat('MMMM yyyy').format(now);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(15),
+        color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(10),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
       ),
       child: Row(
@@ -122,7 +124,11 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Text(
             monthYear,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+            style: TextStyle(
+              fontSize: 18, 
+              fontWeight: FontWeight.w600, 
+              color: isDark ? Colors.white : const Color(0xFF1F2937),
+            ),
           ),
           if (provider.totalBudget > 0)
             Text(
@@ -140,13 +146,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomDock(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return SafeArea(
       top: false,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(20),
-          border: Border(top: BorderSide(color: Colors.white.withAlpha(15))),
+          color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(10),
+          border: Border(top: BorderSide(color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(15))),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -207,8 +216,10 @@ class _DockItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return IconButton(
-      icon: Icon(icon, color: Colors.white70),
+      icon: Icon(icon, color: isDark ? Colors.white70 : const Color(0xFF6B7280)),
       onPressed: onTap,
     );
   }
@@ -223,21 +234,26 @@ class _DockCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorSecondary = isDark ? Colors.white70 : const Color(0xFF6B7280);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.blueAccent,
+          color: theme.cardColor,
           borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.grey.withAlpha(50)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white, size: 20),
+            Icon(icon, color: colorSecondary, size: 20),
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: colorSecondary, fontWeight: FontWeight.bold),
             ),
           ],
         ),

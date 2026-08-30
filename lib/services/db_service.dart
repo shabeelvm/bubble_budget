@@ -19,7 +19,7 @@ class DBService {
     String path = join(await getDatabasesPath(), 'bubble_budget.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -46,17 +46,66 @@ class DBService {
       )
     ''');
 
-    // Seed 4 clean defaults with distinct colors
+    // Seed 5 clean defaults with distinct colors (including Coffee and Food & Dining)
     await db.insert('categories', {'id': 'groceries', 'name': 'Groceries', 'budget_limit': 400.0, 'color_hex': 'FF4CAF50'}); 
-    await db.insert('categories', {'id': 'dining', 'name': 'Dining Out', 'budget_limit': 200.0, 'color_hex': 'FFFF5722'});
+    await db.insert('categories', {'id': 'dining', 'name': 'Food & Dining', 'budget_limit': 200.0, 'color_hex': 'FFFF5722'});
     await db.insert('categories', {'id': 'transport', 'name': 'Transport', 'budget_limit': 120.0, 'color_hex': 'FF2196F3'});
     await db.insert('categories', {'id': 'subscriptions', 'name': 'Subscriptions', 'budget_limit': 50.0, 'color_hex': 'FF9C27B0'});
+    await db.insert('categories', {'id': 'coffee', 'name': 'Coffee', 'budget_limit': 50.0, 'color_hex': 'FF795548'});
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Add is_synced column to expenses table
       await db.execute('ALTER TABLE expenses ADD COLUMN is_synced INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 3) {
+      // 1. Rename 'Dining Out' to 'Food & Dining' in the categories table if it exists
+      await db.update(
+        'categories', 
+        {'name': 'Food & Dining'}, 
+        where: 'id = ? OR name = ?', 
+        whereArgs: ['dining', 'Dining Out']
+      );
+
+      // 2. Ensure 'Coffee' category exists in the database
+      final List<Map<String, dynamic>> existingCoffee = await db.query(
+        'categories', 
+        where: 'id = ? OR name = ?', 
+        whereArgs: ['coffee', 'Coffee']
+      );
+      if (existingCoffee.isEmpty) {
+        await db.insert('categories', {
+          'id': 'coffee', 
+          'name': 'Coffee', 
+          'budget_limit': 50.0, 
+          'color_hex': 'FF795548'
+        });
+      }
+
+      // 3. Re-link any orphaned/mismatched 'Coffee' bubbles or transactions
+      final List<Map<String, dynamic>> alternateCoffees = await db.query(
+        'categories',
+        where: 'name = ? AND id != ?',
+        whereArgs: ['Coffee', 'coffee']
+      );
+
+      for (var alt in alternateCoffees) {
+        final altId = alt['id'] as String;
+        // Re-link expenses under the alternate ID to the standard 'coffee' ID
+        await db.update(
+          'expenses',
+          {'category_id': 'coffee'},
+          where: 'category_id = ?',
+          whereArgs: [altId]
+        );
+        // Delete the alternate category to prevent duplicate Coffee bubbles
+        await db.delete(
+          'categories',
+          where: 'id = ?',
+          whereArgs: [altId]
+        );
+      }
     }
   }
 

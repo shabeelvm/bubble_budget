@@ -20,9 +20,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     switch (mode) {
       case ThemeMode.light:
         return 'Soft Light';
-      case ThemeMode.system:
-        return 'System';
       case ThemeMode.dark:
+      default:
         return 'Dark';
     }
   }
@@ -62,13 +61,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildDropdownTile('Currency Symbol', _settings.currencySymbol, ['\$', '€', '£', '₹', '¥', 'A\$'], (val) {
               setState(() => _settings.currencySymbol = val!);
             }),
-            _buildDropdownTile('App Theme', _getThemeLabel(bubbleProvider.themeMode), ['Dark', 'Soft Light', 'System'], (val) {
+            _buildDropdownTile('App Theme', _getThemeLabel(bubbleProvider.themeMode), ['Dark', 'Soft Light'], (val) {
               if (val == 'Dark') {
                 bubbleProvider.setThemeMode(ThemeMode.dark);
               } else if (val == 'Soft Light') {
                 bubbleProvider.setThemeMode(ThemeMode.light);
-              } else if (val == 'System') {
-                bubbleProvider.setThemeMode(ThemeMode.system);
               }
             }),
             SwitchListTile(

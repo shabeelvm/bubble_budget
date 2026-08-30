@@ -21,8 +21,6 @@ class BubbleProvider with ChangeNotifier {
     switch (str) {
       case 'light':
         return ThemeMode.light;
-      case 'system':
-        return ThemeMode.system;
       case 'dark':
       default:
         return ThemeMode.dark;
@@ -35,10 +33,8 @@ class BubbleProvider with ChangeNotifier {
       case ThemeMode.light:
         str = 'light';
         break;
-      case ThemeMode.system:
-        str = 'system';
-        break;
       case ThemeMode.dark:
+      default:
         str = 'dark';
         break;
     }
