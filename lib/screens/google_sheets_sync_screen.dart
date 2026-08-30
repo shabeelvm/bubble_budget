@@ -35,12 +35,31 @@ class _GoogleSheetsSyncScreenState extends State<GoogleSheetsSyncScreen> {
     super.initState();
     _tagController.text = _settings.sheetTag;
     _updatePendingCount();
+
+    // Attach listeners for reactive sync state updates
+    _syncService.isSyncingNotifier.addListener(_onSyncStateChanged);
+    _syncService.syncCompletedNotifier.addListener(_onSyncStateChanged);
+  }
+
+  @override
+  void dispose() {
+    _syncService.isSyncingNotifier.removeListener(_onSyncStateChanged);
+    _syncService.syncCompletedNotifier.removeListener(_onSyncStateChanged);
+    _tagController.dispose();
+    _webhookController.dispose();
+    super.dispose();
+  }
+
+  void _onSyncStateChanged() {
+    if (mounted) {
+      _updatePendingCount();
+    }
   }
 
   Future<void> _updatePendingCount() async {
-    final unsynced = await _dbService.getUnsyncedExpenses();
+    final count = await _dbService.getUnsyncedExpenseCount();
     if (mounted) {
-      setState(() => _pendingCount = unsynced.length);
+      setState(() => _pendingCount = count);
     }
   }
 
@@ -97,22 +116,22 @@ $kAppsScriptCode
     await Share.share(guide, subject: 'Bubble Budget Setup Kit');
   }
 
-  Future<void> _launchTemplateUrl() async {
-    final Uri url = Uri.parse(kGoogleSheetTemplateUrl);
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {}
-  }
+
 
   Future<void> _verifyAndConnect() async {
-    final url = _webhookController.text.trim();
+    final rawUrl = _webhookController.text.trim();
     final tag = _tagController.text.trim();
 
-    if (url.isEmpty || tag.isEmpty) {
+    if (rawUrl.isEmpty || tag.isEmpty) {
       _showSnackbar('Please enter both Webhook URL and Sheet Tag.', isError: true);
       return;
+    }
+
+    var url = rawUrl;
+    if (url.endsWith('/dev')) {
+      url = '${url.substring(0, url.length - 4)}/exec';
+    } else if (url.endsWith('/edit')) {
+      url = '${url.substring(0, url.length - 5)}/exec';
     }
 
     setState(() => _isVerifying = true);
@@ -235,44 +254,46 @@ $kAppsScriptCode
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildSection('1. Setup Kit', [
-            _buildCard([
-              Text(
-                'Get everything you need to connect your Google Sheets in seconds.',
-                style: TextStyle(color: textSecondary),
-              ),
-              const SizedBox(height: 16),
-              _buildActionButton(
-                icon: Icons.map_outlined,
-                label: 'View Setup Walkthrough',
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => const SheetSetupGuideDialog(),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildActionButton(
-                icon: Icons.copy_rounded,
-                label: 'Copy Script Code',
-                onTap: _copyScriptCode,
-              ),
-              const SizedBox(height: 12),
-              _buildActionButton(
-                icon: Icons.email_outlined,
-                label: 'Email Setup Kit to Myself',
-                onTap: _emailSetupKit,
-              ),
-              const SizedBox(height: 12),
-              _buildActionButton(
-                icon: Icons.share_rounded,
-                label: 'Share via Apps',
-                onTap: _shareSetupKit,
-              ),
+          if (!isConnected) ...[
+            _buildSection('1. Setup Kit', [
+              _buildCard([
+                Text(
+                  'Get everything you need to connect your Google Sheets in seconds.',
+                  style: TextStyle(color: textSecondary),
+                ),
+                const SizedBox(height: 16),
+                _buildActionButton(
+                  icon: Icons.map_outlined,
+                  label: 'View Setup Walkthrough',
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => const SheetSetupGuideDialog(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  icon: Icons.copy_rounded,
+                  label: 'Copy Script Code',
+                  onTap: _copyScriptCode,
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  icon: Icons.email_outlined,
+                  label: 'Email Setup Kit to Myself',
+                  onTap: _emailSetupKit,
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  icon: Icons.share_rounded,
+                  label: 'Share via Apps',
+                  onTap: _shareSetupKit,
+                ),
+              ]),
             ]),
-          ]),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
+          ],
           _buildSection('2. Configuration', [
             if (showSetup) ...[
               _buildCard([
@@ -393,31 +414,6 @@ $kAppsScriptCode
                 ],
                 const SizedBox(height: 12),
                 const Divider(height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => const SheetSetupGuideDialog(),
-                        );
-                      },
-                      icon: const Icon(Icons.help_outline, size: 16),
-                      label: const Text('Instructions'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
-                    ),
-                    TextButton.icon(
-                      onPressed: _launchTemplateUrl,
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Sheet Template'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Divider(height: 1),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -461,7 +457,24 @@ $kAppsScriptCode
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Pending Records', style: TextStyle(color: textPrimary)),
+                  Row(
+                    children: [
+                      Text('Pending Records', style: TextStyle(color: textPrimary)),
+                      if (_syncService.isSyncingNotifier.value) ...[
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orangeAccent),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Syncing with Google Sheets...',
+                          style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ],
+                  ),
                   Text(
                     '$_pendingCount',
                     style: TextStyle(
