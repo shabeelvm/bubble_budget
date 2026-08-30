@@ -11,6 +11,9 @@ class MockDBService implements DBService {
   Future<List<Map<String, dynamic>>> getCategoriesWithMonthlySpend(DateTime month) async => [];
 
   @override
+  Future<int> getExpenseCount() async => 0;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

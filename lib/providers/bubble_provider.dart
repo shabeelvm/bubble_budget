@@ -11,10 +11,12 @@ class BubbleProvider with ChangeNotifier {
   double _screenWidth = 375.0;
   double _screenHeight = 600.0;
   final DBService _dbService;
+  int _expenseCount = 0;
 
   List<Bubble> get bubbles => _bubbles;
   double get screenWidth => _screenWidth;
   double get screenHeight => _screenHeight;
+  int get expenseCount => _expenseCount;
 
   ThemeMode get themeMode {
     final str = SettingsService().themeModeStr;
@@ -51,6 +53,7 @@ class BubbleProvider with ChangeNotifier {
 
   Future<void> loadFromDatabase() async {
     final data = await _dbService.getCategoriesWithMonthlySpend(DateTime.now());
+    _expenseCount = await _dbService.getExpenseCount();
     final random = math.Random();
     
     _bubbles = data.map((map) {
@@ -164,10 +167,15 @@ class BubbleProvider with ChangeNotifier {
 
   /// Logs an expense, persists it to DB, and updates local state.
   Future<void> logExpense(String categoryId, double amount) async {
+    if (amount.abs() >= 10000000) {
+      throw ArgumentError("Entry error: Amount must be less than 10,000,000");
+    }
+
     final index = _bubbles.indexWhere((b) => b.id == categoryId);
     if (index == -1) return;
 
     final expenseId = await _dbService.insertExpense(categoryId, amount);
+    _expenseCount = await _dbService.getExpenseCount();
 
     final bubble = _bubbles[index];
     final newSpend = bubble.monthlySpend + amount;

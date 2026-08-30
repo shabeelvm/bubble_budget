@@ -50,6 +50,9 @@ class MockDBService implements DBService {
   Future<int> getCategoryCount() async => _categories.length;
 
   @override
+  Future<int> getExpenseCount() async => 0;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

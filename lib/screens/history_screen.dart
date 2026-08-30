@@ -65,8 +65,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   title: Text(expense['category_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(formattedDate),
                   trailing: Text(
-                    '-\$${(expense['amount'] as double).toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                    expense['amount'] >= 0
+                        ? '-\$${(expense['amount'] as double).toStringAsFixed(2)}'
+                        : '+\$${(expense['amount'] as double).abs().toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: expense['amount'] >= 0 ? Colors.redAccent : Colors.tealAccent,
+                    ),
                   ),
                 ),
               );

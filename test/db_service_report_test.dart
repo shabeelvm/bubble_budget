@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bubble_budget/services/db_service.dart';
+import 'package:bubble_budget/providers/bubble_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -89,6 +90,43 @@ void main() {
       
       expect(monthlySpending[1], 100.0);
       expect(monthlySpending[2], 200.0);
+    });
+
+    test('500-transaction FIFO pruning deletes the oldest records', () async {
+      // Clear database to be safe
+      final db = await dbService.database;
+      await db.delete('expenses');
+
+      // Insert 505 expenses
+      for (int i = 1; i <= 505; i++) {
+        await dbService.insertExpense('cat1', i.toDouble(), note: 'Expense $i');
+      }
+
+      // Check current count
+      final count = await dbService.getExpenseCount();
+      expect(count, 500);
+
+      // Verify that the oldest 5 (Expense 1 to Expense 5) were pruned
+      // and that the newest remaining is Expense 505, and the oldest remaining is Expense 6.
+      final expenses = await dbService.getExpenses();
+      expect(expenses.length, 500);
+      
+      // Since getExpenses() returns ORDER BY timestamp DESC, the first one is the newest (Expense 505)
+      expect(expenses.first['amount'], 505.0);
+      // The last one is the oldest remaining (Expense 6)
+      expect(expenses.last['amount'], 6.0);
+    });
+
+    test('logExpense throws ArgumentError when amount is >= 10,000,000', () {
+      final provider = BubbleProvider(dbService: dbService);
+      expect(
+        () => provider.logExpense('cat1', 10000000.0),
+        throwsArgumentError,
+      );
+      expect(
+        () => provider.logExpense('cat1', -10000001.0),
+        throwsArgumentError,
+      );
     });
   });
 }

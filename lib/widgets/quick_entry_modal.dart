@@ -73,8 +73,17 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
 
   void _submit() {
     _audio.triggerHapticHeavy();
-    _audio.playSuccess();
     double amount = double.tryParse(_amountString) ?? 0;
+    if (amount >= 10000000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Entry error: Amount must be less than 10,000,000"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+    _audio.playSuccess();
     if (amount > 0) {
       widget.onDone(_isNegative ? -amount : amount);
       Navigator.pop(context);

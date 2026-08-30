@@ -127,13 +127,41 @@ class DBService {
 
   Future<int> insertExpense(String categoryId, double amount, {String note = ''}) async {
     final db = await database;
-    return await db.insert('expenses', {
-      'category_id': categoryId,
-      'amount': amount,
-      'timestamp': DateTime.now().toIso8601String(),
-      'note': note,
-      'is_synced': 0,
+    return await db.transaction((txn) async {
+      final int expenseId = await txn.insert('expenses', {
+        'category_id': categoryId,
+        'amount': amount,
+        'timestamp': DateTime.now().toIso8601String(),
+        'note': note,
+        'is_synced': 0,
+      });
+
+      final List<Map<String, dynamic>> countResult = await txn.rawQuery('SELECT COUNT(*) as cnt FROM expenses');
+      final int count = countResult.isNotEmpty ? (countResult.first['cnt'] as int? ?? 0) : 0;
+
+      if (count > 500) {
+        final int toDeleteCount = count - 500;
+        final List<Map<String, dynamic>> oldestResult = await txn.rawQuery(
+          'SELECT id FROM expenses ORDER BY timestamp ASC, id ASC LIMIT ?', 
+          [toDeleteCount]
+        );
+        if (oldestResult.isNotEmpty) {
+          final List<int> deleteIds = oldestResult.map((e) => e['id'] as int).toList();
+          await txn.delete(
+            'expenses', 
+            where: "id IN (${deleteIds.join(',')})"
+          );
+        }
+      }
+
+      return expenseId;
     });
+  }
+
+  Future<int> getExpenseCount() async {
+    final db = await database;
+    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM expenses'));
+    return count ?? 0;
   }
 
   Future<List<Map<String, dynamic>>> getExpenses() async {

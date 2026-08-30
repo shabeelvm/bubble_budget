@@ -8,7 +8,9 @@ import 'screens/settings_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/category_screen.dart';
 import 'screens/reports_screen.dart';
+import 'screens/google_sheets_sync_screen.dart';
 import 'services/settings_service.dart';
+import 'services/export_service.dart';
 import 'widgets/privacy_consent_dialog.dart';
 import 'services/analytics_service.dart';
 import 'theme/app_theme.dart';
@@ -72,6 +74,53 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _checkStorageLimit(BuildContext context) {
+    final provider = context.read<BubbleProvider>();
+    final count = provider.expenseCount;
+    if (count >= 400 && count <= 500) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text("Storage Nearing Limit", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: Text(
+            "You have logged $count transactions. Bubble Budget is nearing its 500-transaction local storage limit. Older transactions will be overwritten.",
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Dismiss", style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ExportService().exportToCsv();
+              },
+              child: const Text("Export CSV", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const GoogleSheetsSyncScreen()),
+                );
+              },
+              child: const Text("Sync to Sheets", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService();
@@ -90,8 +139,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     backgroundColor: Colors.transparent,
                     builder: (context) => QuickEntryModal(
                       bubble: bubble,
-                      onDone: (amount) {
-                        context.read<BubbleProvider>().logExpense(bubble.id, amount);
+                      onDone: (amount) async {
+                        final provider = context.read<BubbleProvider>();
+                        await provider.logExpense(bubble.id, amount);
+                        if (context.mounted) {
+                          _checkStorageLimit(context);
+                        }
                       },
                     ),
                   );
