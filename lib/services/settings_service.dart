@@ -130,6 +130,9 @@ class SettingsService {
   bool get hasAcceptedPrivacy => _prefs.getBool('has_accepted_privacy') ?? false;
   set hasAcceptedPrivacy(bool value) => _prefs.setBool('has_accepted_privacy', value);
 
+  bool get hasSeenWelcome => _prefs.getBool('has_seen_welcome') ?? false;
+  set hasSeenWelcome(bool value) => _prefs.setBool('has_seen_welcome', value);
+
   String get themeModeStr => _prefs.getString('themeMode') ?? 'dark';
   set themeModeStr(String value) => _prefs.setString('themeMode', value);
 }

@@ -69,7 +69,7 @@ class TestWrapper extends StatelessWidget {
 
 void main() {
   testWidgets('BubbleBudgetApp loads and shows BubbleCanvas', (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'has_seen_welcome': true});
     await SettingsService().init();
     
     final mockDb = MockDBService();

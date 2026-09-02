@@ -9,6 +9,7 @@ import 'screens/history_screen.dart';
 import 'screens/category_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/google_sheets_sync_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/settings_service.dart';
 import 'services/export_service.dart';
 import 'widgets/privacy_consent_dialog.dart';
@@ -31,13 +32,16 @@ class BubbleBudgetApp extends StatelessWidget {
       create: (_) => provider ?? BubbleProvider(),
       child: Consumer<BubbleProvider>(
         builder: (context, bubbleProvider, _) {
+          final settings = SettingsService();
+          final bool hasSeenWelcome = settings.hasSeenWelcome;
+
           return MaterialApp(
             title: 'Bubble Budget',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: bubbleProvider.themeMode,
-            home: const HomeScreen(),
+            home: hasSeenWelcome ? const HomeScreen() : const WelcomeScreen(),
           );
         },
       ),
