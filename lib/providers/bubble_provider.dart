@@ -146,23 +146,34 @@ class BubbleProvider with ChangeNotifier {
   void setScreenSize(double width, double height) {
     _screenWidth = width;
     _screenHeight = height;
+    
+    // Recalculate radii and clamp coordinates to the new viewport
+    for (int i = 0; i < _bubbles.length; i++) {
+      final b = _bubbles[i];
+      final newRadius = calculateRadius(b.monthlySpend, b.budgetLimit);
+      _bubbles[i] = b.copyWith(radius: newRadius);
+    }
+    
     _clampBubblesToScreen();
     notifyListeners();
   }
 
   /// Calculates dynamic radius based on spend vs limit.
-  /// Minimum radius is 40.0 (for tap accuracy), scaling up to a maximum cap of 85.0.
-  /// If limit is 0 (unbudgeted), radius is scaled relative to the spending (base 45 + sqrt(spend) * 2).
   double calculateRadius(double spend, double limit) {
+    final viewportArea = _screenWidth * _screenHeight;
+    final baseDynamicRadius = viewportArea > 0 
+        ? (math.sqrt(viewportArea) * 0.125).clamp(70.0, 130.0)
+        : 80.0;
+
     if (limit <= 0) {
       // Unbudgeted/Flexible scaling logic:
-      final radius = 45.0 + math.sqrt(spend) * 2.0; 
-      return radius.clamp(45.0, 85.0);
+      final radius = baseDynamicRadius + math.sqrt(spend) * 2.5; 
+      return radius.clamp(baseDynamicRadius, baseDynamicRadius * 1.6);
     }
-    
+
     final ratio = spend / limit;
-    final radius = 40.0 + (ratio * 40.0);
-    return radius.clamp(40.0, 85.0);
+    final radius = baseDynamicRadius + (ratio * (baseDynamicRadius * 0.6));
+    return radius.clamp(baseDynamicRadius * 0.7, baseDynamicRadius * 1.6);
   }
 
   /// Logs an expense, persists it to DB, and updates local state.

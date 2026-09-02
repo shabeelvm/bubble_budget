@@ -27,6 +27,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     'FFFFEB3B', // Yellow
     'FF607D8B', // Blue Grey
     'FF795548', // Brown
+    'FF9C27B0', // Deep Purple
+    'FF2196F3', // Blue
+    'FF03A9F4', // Light Blue
+    'FFCDDC39', // Lime Green
+    'FFFF9800', // Orange
+    'FF00E5FF', // Vivid Cyan
+    'FFFF1744', // Vivid Red
+    'FF9E9E9E', // Grey
   ];
 
   @override
@@ -98,6 +106,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               : bubble.budgetLimit.toString()),
     );
     String selectedColor = bubble?.colorHex ?? _colorPalette[0];
+    bool isBudgetToggled = (bubble != null && bubble.budgetLimit > 0);
 
     showDialog(
       context: context,
@@ -116,17 +125,32 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: const InputDecoration(labelText: 'Category Name', labelStyle: TextStyle(color: Colors.white70)),
                   ),
-                  TextField(
-                    controller: limitController, 
-                    keyboardType: TextInputType.number, 
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      labelText: 'Monthly Budget Limit', 
-                      labelStyle: TextStyle(color: Colors.white70),
-                      helperText: 'Optional — leave blank for open tracking',
-                      helperStyle: TextStyle(color: Colors.white54),
-                    ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    title: const Text('Set Monthly Budget', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    value: isBudgetToggled,
+                    onChanged: (val) {
+                      setDialogState(() {
+                        isBudgetToggled = val;
+                      });
+                    },
+                    activeThumbColor: Colors.blueAccent,
+                    contentPadding: EdgeInsets.zero,
                   ),
+                  if (isBudgetToggled) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: limitController, 
+                      keyboardType: TextInputType.number, 
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Monthly Budget Limit', 
+                        labelStyle: TextStyle(color: Colors.white70),
+                        helperText: 'Enter target amount',
+                        helperStyle: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   const Text('Pick Color', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 12),
@@ -172,7 +196,18 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               onPressed: () async {
                 final name = nameController.text.trim();
                 final limitText = limitController.text.trim();
-                final limit = limitText.isEmpty ? 0.0 : (double.tryParse(limitText) ?? 0.0);
+                final limit = (isBudgetToggled && limitText.isNotEmpty) ? (double.tryParse(limitText) ?? 0.0) : 0.0;
+                
+                if (isBudgetToggled && limit >= 10000000) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Entry error: Budget limit must be less than 10,000,000"),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                  return;
+                }
+
                 if (name.isNotEmpty) {
                   final provider = context.read<BubbleProvider>();
                   final navigator = Navigator.of(context);

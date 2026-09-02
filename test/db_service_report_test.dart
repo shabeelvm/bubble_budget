@@ -11,7 +11,7 @@ void main() {
     late DBService dbService;
 
     setUp(() async {
-      dbService = DBService();
+      dbService = DBService(customPath: inMemoryDatabasePath);
       final db = await dbService.database;
       await db.delete('expenses');
       await db.delete('categories');
@@ -19,6 +19,10 @@ void main() {
       // Seed categories
       await dbService.insertCategory('cat1', 'Food', 100.0, 'FF0000FF');
       await dbService.insertCategory('cat2', 'Rent', 500.0, 'FF00FF00');
+    });
+
+    tearDown(() async {
+      await dbService.close();
     });
 
     test('Monthly aggregation calculates correctly', () async {
@@ -117,8 +121,9 @@ void main() {
       expect(expenses.last['amount'], 6.0);
     });
 
-    test('logExpense throws ArgumentError when amount is >= 10,000,000', () {
+    test('logExpense throws ArgumentError when amount is >= 10,000,000', () async {
       final provider = BubbleProvider(dbService: dbService);
+      await Future.delayed(const Duration(milliseconds: 50)); // Allow async database initialization to finish
       expect(
         () => provider.logExpense('cat1', 10000000.0),
         throwsArgumentError,

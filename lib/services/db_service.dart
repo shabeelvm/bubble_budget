@@ -4,8 +4,15 @@ import 'package:path/path.dart';
 class DBService {
   static final DBService _instance = DBService._internal();
   static Database? _database;
+  String? _customPath;
 
-  factory DBService() => _instance;
+  factory DBService({String? customPath}) {
+    if (customPath != null) {
+      _instance._customPath = customPath;
+      _database = null; // Force recreation with the custom path
+    }
+    return _instance;
+  }
 
   DBService._internal();
 
@@ -15,8 +22,16 @@ class DBService {
     return _database!;
   }
 
+  Future<void> close() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+    _customPath = null;
+  }
+
   Future<Database> _initDB() async {
-    String path = join(await getDatabasesPath(), 'bubble_budget.db');
+    String path = _customPath ?? join(await getDatabasesPath(), 'bubble_budget.db');
     return await openDatabase(
       path,
       version: 3,
@@ -47,11 +62,11 @@ class DBService {
     ''');
 
     // Seed 5 clean defaults with distinct colors (including Coffee and Food & Dining)
-    await db.insert('categories', {'id': 'groceries', 'name': 'Groceries', 'budget_limit': 400.0, 'color_hex': 'FF4CAF50'}); 
-    await db.insert('categories', {'id': 'dining', 'name': 'Food & Dining', 'budget_limit': 200.0, 'color_hex': 'FFFF5722'});
-    await db.insert('categories', {'id': 'transport', 'name': 'Transport', 'budget_limit': 120.0, 'color_hex': 'FF2196F3'});
-    await db.insert('categories', {'id': 'subscriptions', 'name': 'Subscriptions', 'budget_limit': 50.0, 'color_hex': 'FF9C27B0'});
-    await db.insert('categories', {'id': 'coffee', 'name': 'Coffee', 'budget_limit': 50.0, 'color_hex': 'FF795548'});
+    await db.insert('categories', {'id': 'groceries', 'name': 'Groceries', 'budget_limit': 0.0, 'color_hex': 'FF4CAF50'}); 
+    await db.insert('categories', {'id': 'dining', 'name': 'Food & Dining', 'budget_limit': 0.0, 'color_hex': 'FFFF5722'});
+    await db.insert('categories', {'id': 'transport', 'name': 'Transport', 'budget_limit': 0.0, 'color_hex': 'FF2196F3'});
+    await db.insert('categories', {'id': 'subscriptions', 'name': 'Subscriptions', 'budget_limit': 0.0, 'color_hex': 'FF9C27B0'});
+    await db.insert('categories', {'id': 'coffee', 'name': 'Coffee', 'budget_limit': 0.0, 'color_hex': 'FF795548'});
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -78,7 +93,7 @@ class DBService {
         await db.insert('categories', {
           'id': 'coffee', 
           'name': 'Coffee', 
-          'budget_limit': 50.0, 
+          'budget_limit': 0.0, 
           'color_hex': 'FF795548'
         });
       }
@@ -182,6 +197,12 @@ class DBService {
       JOIN categories c ON e.category_id = c.id
       WHERE e.is_synced = 0
     ''');
+  }
+
+  Future<int> getUnsyncedExpenseCount() async {
+    final db = await database;
+    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM expenses WHERE is_synced = 0'));
+    return count ?? 0;
   }
 
   Future<void> markExpenseAsSynced(int id) async {
