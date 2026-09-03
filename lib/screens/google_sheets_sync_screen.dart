@@ -24,6 +24,10 @@ class _GoogleSheetsSyncScreenState extends State<GoogleSheetsSyncScreen> {
   
   final TextEditingController _webhookController = TextEditingController();
   final TextEditingController _tagController = TextEditingController();
+
+  // Pre-filled so the name field can never be the thing standing between the
+  // user and a working connection. It is only ever a label.
+  static const String _defaultSheetTag = 'My Budget Sheet';
   
   bool _isVerifying = false;
   bool _isSyncing = false;
@@ -33,7 +37,7 @@ class _GoogleSheetsSyncScreenState extends State<GoogleSheetsSyncScreen> {
   @override
   void initState() {
     super.initState();
-    _tagController.text = _settings.sheetTag;
+    _tagController.text = _settings.sheetTag.isEmpty ? _defaultSheetTag : _settings.sheetTag;
     _updatePendingCount();
 
     // Attach listeners for reactive sync state updates
@@ -122,8 +126,12 @@ $kAppsScriptCode
     final rawUrl = _webhookController.text.trim();
     final tag = _tagController.text.trim();
 
-    if (rawUrl.isEmpty || tag.isEmpty) {
-      _showSnackbar('Please enter both Webhook URL and Sheet Tag.', isError: true);
+    if (rawUrl.isEmpty) {
+      _showSnackbar('Paste the connection link from Google to continue.', isError: true);
+      return;
+    }
+    if (tag.isEmpty) {
+      _showSnackbar('Give this connection a name so you can recognise it later.', isError: true);
       return;
     }
 
@@ -154,9 +162,14 @@ $kAppsScriptCode
       });
       await _updatePendingCount();
     } else {
+      // Almost every failure here is one of two things. Naming them beats
+      // asking a non-technical user to go and diagnose "permissions".
       _showSnackbar(
-        'Could not reach endpoint. Please check your deployment URL and permissions.',
+        "Couldn't reach your sheet. Two things to check in Google:\n"
+        "1. Deploy > Manage deployments > 'Who has access' must be set to 'Anyone'.\n"
+        "2. Paste the deployment link ending in /exec - not your sheet's own web address.",
         isError: true,
+        duration: const Duration(seconds: 12),
       );
     }
   }
@@ -205,12 +218,16 @@ $kAppsScriptCode
     _showSnackbar('Sync complete!');
   }
 
-  void _showSnackbar(String message, {bool isError = false}) {
+  void _showSnackbar(String message, {bool isError = false, Duration? duration}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: duration ?? const Duration(seconds: 4),
+        // Anything given a longer life is something the user has to read and
+        // act on, so give them a way to dismiss it.
+        showCloseIcon: duration != null,
       ),
     );
   }
@@ -258,13 +275,36 @@ $kAppsScriptCode
             _buildSection('1. Setup Kit', [
               _buildCard([
                 Text(
-                  'Get everything you need to connect your Google Sheets in seconds.',
+                  'The Google side of this is much easier on a computer. Send yourself the kit, then finish it in your browser.',
                   style: TextStyle(color: textSecondary),
                 ),
                 const SizedBox(height: 16),
                 _buildActionButton(
+                  icon: Icons.email_outlined,
+                  label: 'Email the kit to myself',
+                  onTap: _emailSetupKit,
+                  primary: true,
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  icon: Icons.share_rounded,
+                  label: 'Send it another way',
+                  onTap: _shareSetupKit,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'OR SET IT UP FROM HERE',
+                  style: TextStyle(
+                    color: textSecondary.withAlpha(179),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildActionButton(
                   icon: Icons.map_outlined,
-                  label: 'View Setup Walkthrough',
+                  label: 'View setup walkthrough',
                   onTap: () {
                     showDialog(
                       context: context,
@@ -275,20 +315,8 @@ $kAppsScriptCode
                 const SizedBox(height: 12),
                 _buildActionButton(
                   icon: Icons.copy_rounded,
-                  label: 'Copy Script Code',
+                  label: 'Copy script code',
                   onTap: _copyScriptCode,
-                ),
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  icon: Icons.email_outlined,
-                  label: 'Email Setup Kit to Myself',
-                  onTap: _emailSetupKit,
-                ),
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  icon: Icons.share_rounded,
-                  label: 'Share via Apps',
-                  onTap: _shareSetupKit,
                 ),
               ]),
             ]),
@@ -301,9 +329,9 @@ $kAppsScriptCode
                   controller: _tagController,
                   style: TextStyle(color: textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Sheet Tag / Nickname',
+                    labelText: 'Name this connection',
                     labelStyle: TextStyle(color: textSecondary),
-                    helperText: 'Tip: Match this with your Google Sheet file name (e.g., Bubble Budget 2026)',
+                    helperText: 'Just a label, so you know which sheet this is. Your Google Sheet file name works well.',
                     helperStyle: TextStyle(color: textSecondary.withOpacity(0.7)),
                     border: const OutlineInputBorder(),
                   ),
@@ -313,7 +341,7 @@ $kAppsScriptCode
                   controller: _webhookController,
                   style: TextStyle(color: textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Google Sheets Webhook URL',
+                    labelText: 'Connection link from Google',
                     labelStyle: TextStyle(color: textSecondary),
                     hintText: 'https://script.google.com/macros/s/...',
                     border: const OutlineInputBorder(),
@@ -349,7 +377,7 @@ $kAppsScriptCode
                         setState(() {
                           _isEditing = false;
                           _webhookController.clear();
-                          _tagController.text = _settings.sheetTag;
+                          _tagController.text = _settings.sheetTag.isEmpty ? _defaultSheetTag : _settings.sheetTag;
                         });
                       },
                       child: Text('Cancel', style: TextStyle(color: textSecondary)),
@@ -422,7 +450,7 @@ $kAppsScriptCode
                         onPressed: () {
                           setState(() {
                             _isEditing = true;
-                            _tagController.text = _settings.sheetTag;
+                            _tagController.text = _settings.sheetTag.isEmpty ? _defaultSheetTag : _settings.sheetTag;
                             _webhookController.clear();
                           });
                         },
@@ -457,24 +485,30 @@ $kAppsScriptCode
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Text('Pending Records', style: TextStyle(color: textPrimary)),
-                      if (_syncService.isSyncingNotifier.value) ...[
-                        const SizedBox(width: 8),
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orangeAccent),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Syncing with Google Sheets...',
-                          style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontStyle: FontStyle.italic),
-                        ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text('Pending Records', style: TextStyle(color: textPrimary)),
+                        if (_syncService.isSyncingNotifier.value) ...[
+                          const SizedBox(width: 8),
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orangeAccent),
+                          ),
+                          const SizedBox(width: 6),
+                          const Expanded(
+                            child: Text(
+                              'Syncing with Google Sheets...',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '$_pendingCount',
                     style: TextStyle(
@@ -553,11 +587,25 @@ $kAppsScriptCode
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
     final textSecondary = isDark ? Colors.white54 : const Color(0xFF6B7280);
+
+    // A tint rather than a filled button: this is the recommended route, but it
+    // must not out-shout "Verify & Connect" further down the screen.
+    final Color background = primary
+        ? Colors.blueAccent.withAlpha(isDark ? 38 : 22)
+        : (isDark ? Colors.white.withAlpha(5) : const Color(0xFFF9FAFB));
+    final Color borderColor = primary
+        ? Colors.blueAccent.withAlpha(isDark ? 90 : 70)
+        : (isDark ? Colors.white.withAlpha(5) : const Color(0xFFF3F4F6));
 
     return InkWell(
       onTap: onTap,
@@ -565,15 +613,27 @@ $kAppsScriptCode
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withAlpha(5) : const Color(0xFFF9FAFB),
+          color: background,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDark ? Colors.white.withAlpha(5) : const Color(0xFFF3F4F6)),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           children: [
-            Icon(icon, color: textSecondary, size: 20),
+            Icon(icon, color: primary ? Colors.blueAccent : textSecondary, size: 20),
             const SizedBox(width: 12),
-            Text(label, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w500)),
+            // Expanded so a long label wraps instead of overflowing at large
+            // Dynamic Type - these labels were previously unconstrained.
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: primary ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ),
+            if (primary)
+              const Icon(Icons.arrow_forward_rounded, color: Colors.blueAccent, size: 16),
           ],
         ),
       ),

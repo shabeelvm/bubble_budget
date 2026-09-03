@@ -10,9 +10,9 @@ import 'screens/category_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/google_sheets_sync_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'screens/privacy_onboarding_screen.dart';
 import 'services/settings_service.dart';
 import 'services/export_service.dart';
-import 'widgets/privacy_consent_dialog.dart';
 import 'services/analytics_service.dart';
 import 'theme/app_theme.dart';
 
@@ -33,7 +33,17 @@ class BubbleBudgetApp extends StatelessWidget {
       child: Consumer<BubbleProvider>(
         builder: (context, bubbleProvider, _) {
           final settings = SettingsService();
+          final bool hasAcceptedPrivacy = settings.hasAcceptedPrivacy;
           final bool hasSeenWelcome = settings.hasSeenWelcome;
+
+          Widget homeWidget;
+          if (!hasAcceptedPrivacy) {
+            homeWidget = const PrivacyOnboardingScreen();
+          } else if (!hasSeenWelcome) {
+            homeWidget = const WelcomeScreen();
+          } else {
+            homeWidget = const HomeScreen();
+          }
 
           return MaterialApp(
             title: 'Bubble Budget',
@@ -41,7 +51,7 @@ class BubbleBudgetApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: bubbleProvider.themeMode,
-            home: hasSeenWelcome ? const HomeScreen() : const WelcomeScreen(),
+            home: homeWidget,
           );
         },
       ),
@@ -61,21 +71,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPrivacyConsent();
-    });
-  }
-
-  void _checkPrivacyConsent() {
-    final settings = SettingsService();
-    if (!settings.hasAcceptedPrivacy) {
-      PrivacyConsentDialog.show(context, onAccepted: () {
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    } else {
       AnalyticsService().logEvent('app_opened');
-    }
+    });
   }
 
   void _checkStorageLimit(BuildContext context) {
@@ -215,10 +212,11 @@ class _HomeScreenState extends State<HomeScreen> {
           border: Border(top: BorderSide(color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(15))),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _DockItem(
               icon: Icons.bar_chart_rounded,
+              label: 'Reports',
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -227,9 +225,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {});
               },
             ),
-            _DockCapsule(
-              icon: Icons.tune_rounded,
-              label: 'Manage Bubbles',
+            _DockItem(
+              icon: Icons.bubble_chart_rounded,
+              label: 'Bubbles',
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -240,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             _DockItem(
               icon: Icons.receipt_long_rounded,
+              label: 'History',
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -250,6 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             _DockItem(
               icon: Icons.settings_outlined,
+              label: 'Settings',
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -267,50 +267,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _DockItem extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
-
-  const _DockItem({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    return IconButton(
-      icon: Icon(icon, color: isDark ? Colors.white70 : const Color(0xFF6B7280)),
-      onPressed: onTap,
-    );
-  }
-}
-
-class _DockCapsule extends StatelessWidget {
-  final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _DockCapsule({required this.icon, required this.label, required this.onTap});
+  const _DockItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final colorSecondary = isDark ? Colors.white70 : const Color(0xFF6B7280);
+    final color = isDark ? Colors.white70 : const Color(0xFF6B7280);
 
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.grey.withAlpha(50)),
-        ),
-        child: Row(
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: colorSecondary, size: 20),
-            const SizedBox(width: 8),
+            Icon(icon, color: color, size: 23),
+            const SizedBox(height: 4),
             Text(
               label,
-              style: TextStyle(color: colorSecondary, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
             ),
           ],
         ),

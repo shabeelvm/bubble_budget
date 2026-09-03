@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
 import '../services/audio_service.dart';
+import '../theme/app_theme.dart';
 import '../main.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -21,6 +22,33 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   bool _showMicroToast = false;
   double _microToastOpacity = 0.0;
   double _microToastYOffset = 0.0;
+
+  // Reached only before the user can open Settings, so this screen is dark by
+  // construction rather than by relying on the app's default ThemeMode.
+  static final ThemeData _theme = AppTheme.darkTheme;
+
+  static const Color _textPrimary = Colors.white;
+  static const Color _textSecondary = Colors.white70;
+  static const Color _textTertiary = Color(0x99FFFFFF);
+  // Cream fill (the same value as AppTheme.lightBg) carrying the app's charcoal
+  // label: 13.2:1. On this screen the orb owns all the colour and the button
+  // owns all the brightness, so the two never compete for the eye.
+  static const Color _ctaFill = Color(0xFFF5F3EF);
+  static const Color _ctaLabel = Color(0xFF1F2937);
+
+  static const SystemUiOverlayStyle _overlay = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Color(0xFF070B0B),
+    systemNavigationBarIconBrightness: Brightness.light,
+  );
+
+  static const RadialGradient _backgroundGradient = RadialGradient(
+    center: Alignment.center,
+    radius: 1.2,
+    colors: [Color(0xFF0F2626), Color(0xFF070B0B)],
+  );
 
   @override
   void initState() {
@@ -119,220 +147,318 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // soft, subtle radial gradient teal/white for high-end consumer aesthetic
-    final backgroundGradient = RadialGradient(
-      center: Alignment.center,
-      radius: 1.2,
-      colors: isDark
-          ? const [Color(0xFF0F2626), Color(0xFF070B0B)]
-          : const [Color(0xFFE0F2F1), Color(0xFFFFFFFF)],
-    );
-
-    final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
-    final textSecondary = isDark ? Colors.white70 : const Color(0xFF4B5563);
-
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(gradient: backgroundGradient),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // 1. Onboarding Copywriting
-                Column(
+    return Theme(
+      data: _theme,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: _overlay,
+        child: Scaffold(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(gradient: _backgroundGradient),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
                   children: [
-                    const SizedBox(height: 32),
-                    Text(
-                      'Welcome to Bubble Budget',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: textPrimary,
-                        letterSpacing: -0.5,
+                    // 1. Top 45%: Hero Stage (Floating sample bubble + micro-toast)
+                    Expanded(
+                      flex: 45,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Never larger than the original 190, never larger than
+                          // the space it actually has. On every normal phone this
+                          // resolves to 190; it only shrinks where the old fixed
+                          // size would have overflowed.
+                          final double fits = math.min(
+                            constraints.maxHeight * 0.86,
+                            constraints.maxWidth * 0.58,
+                          );
+                          final double orbSize = fits > 190.0 ? 190.0 : fits;
+
+                          return Center(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Floating & bouncing coral bubble
+                                AnimatedBuilder(
+                                  animation: Listenable.merge([_floatController, _bounceController]),
+                                  builder: (context, child) {
+                                    final floatOffset = math.sin(_floatController.value * math.pi * 2) * 12.0;
+                                    return Transform.translate(
+                                      offset: Offset(0, floatOffset),
+                                      child: Transform.scale(
+                                        scale: _bounceController.value,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: GestureDetector(
+                                    onTap: _handleBubbleTap,
+                                    child: _buildOrb(orbSize),
+                                  ),
+                                ),
+
+                                // Micro-toast Floating Badge
+                                if (_showMicroToast)
+                                  AnimatedBuilder(
+                                    animation: _floatController,
+                                    builder: (context, child) {
+                                      final floatOffset = math.sin(_floatController.value * math.pi * 2) * 12.0;
+                                      return Transform.translate(
+                                        offset: Offset(
+                                          0,
+                                          floatOffset - (orbSize / 2) - 15.0 + _microToastYOffset,
+                                        ),
+                                        child: child,
+                                      );
+                                    },
+                                    child: AnimatedOpacity(
+                                      opacity: _microToastOpacity,
+                                      duration: const Duration(milliseconds: 600),
+                                      curve: Curves.easeOut,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xF00F766E),
+                                          borderRadius: BorderRadius.all(Radius.circular(999)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Color(0x590F766E),
+                                              blurRadius: 16,
+                                              offset: Offset(0, 6),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Text(
+                                          '+\$5.00 logged!',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Budgeting without the friction. Just tap a bubble to log an expense.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: textSecondary,
-                        height: 1.4,
+
+                    // 2. Middle 35%: Typography Block (BELOW the hero stage)
+                    Expanded(
+                      flex: 35,
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Welcome to Bubble Budget',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: _textPrimary,
+                                letterSpacing: -0.4,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 340),
+                              child: const Text(
+                                'Budgeting without the friction. Just tap a bubble to log an expense.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  color: _textSecondary,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 340),
+                              child: const Text(
+                                '100% private and offline. Optionally syncs straight to your own Google Sheet for deep financial clarity.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: _textTertiary,
+                                  height: 1.45,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '100% private and offline. Optionally syncs straight to your own Google Sheet for deep financial clarity.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: textSecondary.withOpacity(0.65),
-                        height: 1.4,
-                        fontStyle: FontStyle.italic,
+
+                    // 3. Bottom 20%: Anchored CTA
+                    Expanded(
+                      flex: 20,
+                      child: Center(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              borderRadius: BorderRadius.all(Radius.circular(30)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Color(0x33F5F3EF),
+                                  blurRadius: 18,
+                                  offset: Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: _handleLetRoll,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _ctaFill,
+                                foregroundColor: _ctaLabel,
+                                minimumSize: const Size(double.infinity, 60),
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.all(Radius.circular(30)),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                "Understood. Let's roll!",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _ctaLabel,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-
-                // 2. The Hero Interactive Bubble Area
-                Expanded(
-                  child: Center(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Floating & bouncing coral bubble
-                        AnimatedBuilder(
-                          animation: Listenable.merge([_floatController, _bounceController]),
-                          builder: (context, child) {
-                            final floatOffset = math.sin(_floatController.value * math.pi * 2) * 12.0;
-                            return Transform.translate(
-                              offset: Offset(0, floatOffset),
-                              child: Transform.scale(
-                                scale: _bounceController.value,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: GestureDetector(
-                            onTap: _handleBubbleTap,
-                            child: Container(
-                              width: 150,
-                              height: 150,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    Color(0xFFFF8A65), // Coral sheen
-                                    Color(0xFFFF5722), // Main Coral
-                                    Color(0xFFE64A19), // Shadow coral
-                                  ],
-                                  center: Alignment(-0.25, -0.25),
-                                  radius: 0.9,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 16,
-                                    offset: Offset(0, 8),
-                                  )
-                                ],
-                              ),
-                              child: const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Tap Me!',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      '☕',
-                                      style: TextStyle(
-                                        fontSize: 26,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Micro-toast Floating Badge
-                        if (_showMicroToast)
-                          AnimatedBuilder(
-                            animation: _floatController,
-                            builder: (context, child) {
-                              final floatOffset = math.sin(_floatController.value * math.pi * 2) * 12.0;
-                              return Transform.translate(
-                                offset: Offset(0, floatOffset - 90.0 + _microToastYOffset),
-                                child: child,
-                              );
-                            },
-                            child: AnimatedOpacity(
-                              opacity: _microToastOpacity,
-                              duration: const Duration(milliseconds: 600),
-                              curve: Curves.easeOut,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.85),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 6,
-                                      offset: Offset(0, 3),
-                                    )
-                                  ],
-                                ),
-                                child: const Text(
-                                  '+\$5.00 logged!',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // 3. Tactile CTA Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 60,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D9488).withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        )
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _handleLetRoll,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488), // Vibrant teal
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        "Understood. Let's roll!",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // Iridescent soap-bubble orb. A sweep gradient lays down the oil-slick sheen;
+  // the violet body sits over it and fades toward the rim, so the iridescence
+  // reads only where a real bubble shows it - around the edge. Same three-pass
+  // logic as the canvas painter: ambient glow, curved body, specular highlight.
+  Widget _buildOrb(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        // Pass 1 of the surface: the oil-slick sweep.
+        gradient: SweepGradient(
+          colors: [
+            Color(0xFF38BDF8), // sky
+            Color(0xFFA78BFA), // violet
+            Color(0xFFF472B6), // pink
+            Color(0xFFFBBF24), // amber
+            Color(0xFF34D399), // emerald
+            Color(0xFF38BDF8), // back to sky, so the seam is invisible
+          ],
+          stops: [0.0, 0.20, 0.42, 0.62, 0.82, 1.0],
+        ),
+        border: Border.fromBorderSide(
+          BorderSide(color: Color(0x33FFFFFF), width: 1.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Color(0x4D7C3AED),
+            blurRadius: 44,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Pass 2: violet body, deliberately transparent at the outer stop so
+            // the sweep beneath it survives as a rim of colour.
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    center: Alignment(-0.32, -0.38),
+                    radius: 0.95,
+                    colors: [
+                      Color(0xFFCBB2FF), // specular glint
+                      Color(0xFF9A6BFA), // upper body
+                      Color(0xE64C1D95), // lower body, slightly translucent
+                      Color(0x4D2E1065), // rim: mostly clear, sheen shows through
+                    ],
+                    stops: [0.0, 0.30, 0.70, 1.0],
+                  ),
+                ),
+              ),
+            ),
+
+            // Pass 3: specular catch-light.
+            Positioned(
+              left: size * 0.18,
+              top: size * 0.15,
+              child: Transform.rotate(
+                angle: -0.42,
+                child: Container(
+                  width: size * 0.34,
+                  height: size * 0.22,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.all(
+                      Radius.elliptical(size * 0.17, size * 0.11),
+                    ),
+                    gradient: const RadialGradient(
+                      colors: [Color(0x99FFFFFF), Color(0x00FFFFFF)],
+                      stops: [0.0, 0.72],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Padded so the label wraps inside the sphere instead of being
+            // clipped by the ClipOval at large Dynamic Type.
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: size * 0.16),
+              child: const Text(
+                'Tap Me!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.2,
+                  shadows: [
+                    Shadow(
+                      color: Color(0x66000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

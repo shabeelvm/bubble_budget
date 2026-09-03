@@ -120,7 +120,7 @@ class SettingsService {
   bool get hapticsEnabled => _prefs.getBool('hapticsEnabled') ?? true;
   set hapticsEnabled(bool value) => _prefs.setBool('hapticsEnabled', value);
 
-  bool get showTotalBudgetHeader => _prefs.getBool('showTotalBudgetHeader') ?? false;
+  bool get showTotalBudgetHeader => _prefs.getBool('showTotalBudgetHeader') ?? true;
   set showTotalBudgetHeader(bool value) => _prefs.setBool('showTotalBudgetHeader', value);
 
   void setShowTotalBudgetHeader(bool value) {
@@ -129,6 +129,9 @@ class SettingsService {
 
   bool get hasAcceptedPrivacy => _prefs.getBool('has_accepted_privacy') ?? false;
   set hasAcceptedPrivacy(bool value) => _prefs.setBool('has_accepted_privacy', value);
+
+  bool get hasAgreedTerms => _prefs.getBool('has_agreed_terms') ?? false;
+  set hasAgreedTerms(bool value) => _prefs.setBool('has_agreed_terms', value);
 
   bool get hasSeenWelcome => _prefs.getBool('has_seen_welcome') ?? false;
   set hasSeenWelcome(bool value) => _prefs.setBool('has_seen_welcome', value);

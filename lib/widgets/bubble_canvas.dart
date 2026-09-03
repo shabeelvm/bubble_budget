@@ -70,7 +70,10 @@ class _BubbleCanvasState extends State<BubbleCanvas>
               onPanEnd: (details) => _handlePanEnd(details, provider),
               child: CustomPaint(
                 size: Size(constraints.maxWidth, constraints.maxHeight),
-                painter: BubblePainter(bubbles: provider.bubbles),
+                painter: BubblePainter(
+                  bubbles: provider.bubbles,
+                  isDark: Theme.of(context).brightness == Brightness.dark,
+                ),
               ),
             );
           },
@@ -136,8 +139,9 @@ class _BubbleCanvasState extends State<BubbleCanvas>
 
 class BubblePainter extends CustomPainter {
   final List<Bubble> bubbles;
+  final bool isDark;
 
-  BubblePainter({required this.bubbles});
+  BubblePainter({required this.bubbles, required this.isDark});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -158,117 +162,128 @@ class BubblePainter extends CustomPainter {
         ? bubble.radius * 1.08
         : bubble.radius;
 
-    // 0. Shadow lift if dragged
-    if (bubble.isDragged) {
-      final shadowPaint = Paint()
-        ..color = Colors.black.withAlpha(80)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12.0);
-      canvas.drawCircle(
-        center + const Offset(0, 8),
-        currentRadius,
-        shadowPaint,
-      );
-    }
+    // Pass 1: Elevation Shadow (Light mode = soft black shadow, Dark mode = subtle neon ambient colored back-glow to pop against black background!)
+    final shadowOffset = Offset(0.0, currentRadius * 0.10);
+    final shadowColor = isDark
+        ? baseColor.withOpacity(0.28) // Dynamic, gorgeous back-glow of the category's own color!
+        : Colors.black.withOpacity(0.14); // Standard soft drop shadow
+    final shadowPaint = Paint()
+      ..color = shadowColor
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, isDark ? currentRadius * 0.22 : currentRadius * 0.18);
+    canvas.drawCircle(center + shadowOffset, currentRadius, shadowPaint);
 
     // 1. Draw elegant outer status rings if needed
     if (ratio > 1.0) {
       final ringPaint = Paint()
-        ..color = Colors.redAccent.withAlpha(180)
+        ..color = const Color(0xFFFF5A5F).withAlpha(200)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0;
+        ..strokeWidth = 2.6;
       canvas.drawCircle(center, currentRadius + 5, ringPaint);
 
       final glowPaint = Paint()
-        ..color = Colors.redAccent.withAlpha(60)
+        ..color = const Color(0xFFFF5A5F).withAlpha(62)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 8.0);
       canvas.drawCircle(center, currentRadius + 6, glowPaint);
     } else if (ratio > 0.8) {
       final ringPaint = Paint()
-        ..color = Colors.orangeAccent.withAlpha(150)
+        ..color = const Color(0xFFFBBF24).withAlpha(165)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
       canvas.drawCircle(center, currentRadius + 4, ringPaint);
 
       final glowPaint = Paint()
-        ..color = Colors.orangeAccent.withAlpha(40)
+        ..color = const Color(0xFFFBBF24).withAlpha(46)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 5.0);
       canvas.drawCircle(center, currentRadius + 4, glowPaint);
     }
 
-    // Dynamic Point-Light Source (Torch at Top-Left)
-    final lightSource = Offset(size.width * 0.12, size.height * 0.04);
-    final toLight = lightSource - center;
-    final distanceToLight = toLight.distance;
-    final dir = distanceToLight > 0.001 ? toLight / distanceToLight : const Offset(0, -1);
+    // Pass 2: Radial Body (Centered at top-left specular glint Alignment(-0.35, -0.35))
+    // In Dark Mode, we increase the specular glint factor to 0.62 and bottom-right shadow factor to 0.55 to maximize volumetric depth!
+    final glintFactor = isDark ? 0.62 : 0.50;
+    final shadowFactor = isDark ? 0.55 : 0.42;
 
-    final lightAlignX = (dir.dx * 0.45).clamp(-0.5, 0.5);
-    final lightAlignY = (dir.dy * 0.45).clamp(-0.5, 0.5);
-
-    final maxDistance = size.longestSide > 0 ? size.longestSide : 800.0;
-    final proximityFactor = (1.0 - (distanceToLight / maxDistance).clamp(0.0, 1.0));
-    final sheenStrength = 0.20 + (proximityFactor * 0.15);
-
-    // 2a. Seamless Volumetric Gradient (No hard circles or disc artifacts)
+    // Four stops rather than three: the bright core is held a little longer and
+    // then rolls into the body faster, which is the falloff a curved surface
+    // actually has. Dark-mode endpoint colours are deliberately unchanged.
     final bodyGradient = RadialGradient(
-      center: Alignment(lightAlignX, lightAlignY),
-      radius:
-          1.15, // Smoothly spans past the edge for a feathered organic falloff
+      center: const Alignment(-0.32, -0.38),
+      radius: 0.95,
       colors: [
-        Color.lerp(
-          baseColor,
-          Colors.white,
-          sheenStrength,
-        )!, // Soft subtle sheen facing the torch
-        baseColor.withAlpha(235), // Base sphere body
-        Color.lerp(
-          baseColor,
-          Colors.black,
-          0.25,
-        )!, // Deep shadow on opposite side
+        Color.lerp(baseColor, Colors.white, glintFactor)!, // Specular top-left glint
+        Color.lerp(baseColor, Colors.white, glintFactor * 0.45)!, // Highlight falloff
+        baseColor, // Main sphere body
+        Color.lerp(baseColor, Colors.black, shadowFactor)!, // Deep bottom-right shadow
       ],
-      stops: const [0.0, 0.55, 1.0],
+      stops: const [0.0, 0.28, 0.66, 1.0],
     );
 
-    final paint = Paint()
+    final bodyPaint = Paint()
       ..shader = bodyGradient.createShader(
         Rect.fromCircle(center: center, radius: currentRadius),
       );
-    canvas.drawCircle(center, currentRadius, paint);
+    canvas.drawCircle(center, currentRadius, bodyPaint);
 
-    // 2b. Dynamic Glass Rim Highlight (Brighter edge facing the torch)
+    // Pass 2b: Specular catch-light. One soft ellipse in the upper-left is the
+    // single strongest cue that a shaded circle is a glass sphere.
+    final catchRect = Rect.fromCenter(
+      center: center + Offset(-currentRadius * 0.40, -currentRadius * 0.44),
+      width: currentRadius * 0.60,
+      height: currentRadius * 0.40,
+    );
+    final catchPaint = Paint()
+      ..color = Colors.white.withOpacity(0.22)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, currentRadius * 0.06);
+    canvas.drawOval(catchRect, catchPaint);
+
+    // Pass 3: Ambient Rim (Draw a 1.2px stroke around perimeter to prevent color bleed and add crispness)
+    final rimColor = isDark
+        ? Colors.white.withOpacity(0.18) // Doubled opacity for high contrast glass edge in Dark Mode!
+        : Colors.black.withOpacity(0.06);
     final rimPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment(dir.dx, dir.dy),
-        end: Alignment(-dir.dx, -dir.dy),
-        colors: [
-          Colors.white.withAlpha(
-            (40 + proximityFactor * 40).toInt(),
-          ), // Catch light facing torch
-          Colors.white.withAlpha(10), // Faint ambient edge on shadow side
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: currentRadius))
+      ..color = rimColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 1.2;
 
-    canvas.drawCircle(center, currentRadius - 0.5, rimPaint);
+    canvas.drawCircle(center, currentRadius, rimPaint);
+
+    // Pass 3b: on real glass the rim is bright where it faces the light and
+    // nearly gone on the shaded side. Keep the uniform rim as the base, then
+    // lay a brighter arc over its upper-left quadrant (195 deg -> 300 deg).
+    final rimArcPaint = Paint()
+      ..color = Colors.white.withOpacity(isDark ? 0.30 : 0.24)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: currentRadius),
+      math.pi * 195 / 180,
+      math.pi * 105 / 180,
+      false,
+      rimArcPaint,
+    );
+
     // 3. Category Text
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.center,
+      maxLines: 1,
+      ellipsis: '...',
     );
 
     const shadow = Shadow(
-      blurRadius: 4.0,
-      color: Colors.black54,
-      offset: Offset(1, 1),
+      blurRadius: 6.0,
+      color: Colors.black45,
+      offset: Offset(0, 1.5),
     );
+
+    final labelFontSize = (currentRadius * 0.22).clamp(12.0, 22.0);
 
     textPainter.text = TextSpan(
       text: bubble.categoryName,
       style: TextStyle(
         color: Colors.white,
         fontWeight: FontWeight.bold,
-        fontSize: (currentRadius / 4.2).clamp(11, 16),
+        fontSize: labelFontSize,
         shadows: const [shadow],
       ),
     );
@@ -284,9 +299,12 @@ class BubblePainter extends CustomPainter {
           ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(2)}'
           : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)}',
       style: TextStyle(
-        color: Colors.white.withAlpha(230),
-        fontSize: (currentRadius / 5.5).clamp(9, 13),
+        color: Colors.white.withAlpha(235),
+        fontSize: (currentRadius * 0.17).clamp(9.0, 15.0),
         fontWeight: FontWeight.w500,
+        letterSpacing: 0.2,
+        // Locks digit width so the amount stops shifting sideways as it repaints.
+        fontFeatures: const [FontFeature.tabularFigures()],
         shadows: const [shadow],
       ),
     );

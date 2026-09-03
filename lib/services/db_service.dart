@@ -61,12 +61,15 @@ class DBService {
       )
     ''');
 
-    // Seed 5 clean defaults with distinct colors (including Coffee and Food & Dining)
-    await db.insert('categories', {'id': 'groceries', 'name': 'Groceries', 'budget_limit': 0.0, 'color_hex': 'FF4CAF50'}); 
+    // Seed 6 clean defaults. Budget limits stay 0.0 - budgets are opt-in and are
+    // set by the user in Manage Bubbles. Colours are the six-way palette:
+    // green, coral, blue, brown, amber, pink.
+    await db.insert('categories', {'id': 'groceries', 'name': 'Groceries', 'budget_limit': 0.0, 'color_hex': 'FF0D9488'});
     await db.insert('categories', {'id': 'dining', 'name': 'Food & Dining', 'budget_limit': 0.0, 'color_hex': 'FFFF5722'});
-    await db.insert('categories', {'id': 'transport', 'name': 'Transport', 'budget_limit': 0.0, 'color_hex': 'FF2196F3'});
-    await db.insert('categories', {'id': 'subscriptions', 'name': 'Subscriptions', 'budget_limit': 0.0, 'color_hex': 'FF9C27B0'});
-    await db.insert('categories', {'id': 'coffee', 'name': 'Coffee', 'budget_limit': 0.0, 'color_hex': 'FF795548'});
+    await db.insert('categories', {'id': 'transport', 'name': 'Transport', 'budget_limit': 0.0, 'color_hex': 'FF2563EB'});
+    await db.insert('categories', {'id': 'coffee', 'name': 'Coffee', 'budget_limit': 0.0, 'color_hex': 'FF7C3AED'});
+    await db.insert('categories', {'id': 'subscriptions', 'name': 'Subscriptions', 'budget_limit': 0.0, 'color_hex': 'FFD97706'});
+    await db.insert('categories', {'id': 'fun', 'name': 'Fun', 'budget_limit': 0.0, 'color_hex': 'FFEC4899'});
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {

@@ -14,27 +14,32 @@ class CategoryManagementScreen extends StatefulWidget {
 class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   final SettingsService _settings = SettingsService();
 
+  // A full hue wheel plus two neutrals. Every swatch carries the white bubble
+  // label at 3:1 or better - the previous Material set included Yellow
+  // (FFFFEB3B) and Grey (FF9E9E9E), on which white text was effectively
+  // invisible. The six seeded defaults all appear here, so a category can
+  // always be set back to the colour it shipped with.
   final List<String> _colorPalette = [
-    'FF4CAF50', // Emerald
     'FFFF5722', // Coral
-    'FF3F51B5', // Indigo
-    'FFFFC107', // Amber
-    'FF009688', // Teal
-    'FF673AB7', // Violet
-    'FFE91E63', // Rose
-    'FF00BCD4', // Cyan
-    'FF8BC34A', // Lime
-    'FFFFEB3B', // Yellow
-    'FF607D8B', // Blue Grey
-    'FF795548', // Brown
-    'FF9C27B0', // Deep Purple
-    'FF2196F3', // Blue
-    'FF03A9F4', // Light Blue
-    'FFCDDC39', // Lime Green
-    'FFFF9800', // Orange
-    'FF00E5FF', // Vivid Cyan
-    'FFFF1744', // Vivid Red
-    'FF9E9E9E', // Grey
+    'FFDC2626', // Red
+    'FFE11D48', // Rose
+    'FFEC4899', // Pink
+    'FFC026D3', // Fuchsia
+    'FF9333EA', // Purple
+    'FF7C3AED', // Violet
+    'FF4F46E5', // Indigo
+    'FF2563EB', // Blue
+    'FF0284C7', // Sky
+    'FF0891B2', // Cyan
+    'FF0D9488', // Teal
+    'FF059669', // Emerald
+    'FF16A34A', // Green
+    'FF65A30D', // Lime
+    'FFA16207', // Gold
+    'FFD97706', // Amber
+    'FFEA580C', // Orange
+    'FF78716C', // Stone
+    'FF475569', // Slate
   ];
 
   @override
