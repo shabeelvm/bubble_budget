@@ -36,6 +36,22 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
           _amountString += '.';
         }
       } else {
+        // Construct the pending amount string to validate before applying
+        final pendingString = _amountString == '0' ? key : _amountString + key;
+        final pendingVal = double.tryParse(pendingString) ?? 0.0;
+        if (pendingVal >= 10000000) {
+          _audio.triggerHapticHeavy();
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Maximum limit is 10,000,000 per transaction"),
+              backgroundColor: Colors.redAccent,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
         if (_amountString == '0') {
           _amountString = key;
         } else {
@@ -58,6 +74,19 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
     _audio.triggerHapticMedium();
     _audio.playTap();
     double current = double.tryParse(_amountString) ?? 0;
+    final pendingVal = current + value;
+    if (pendingVal >= 10000000) {
+      _audio.triggerHapticHeavy();
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Maximum limit is 10,000,000 per transaction"),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     setState(() {
       _amountString = (current + value).toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
     });
@@ -110,21 +139,28 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  sign,
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: displayColor.withAlpha(150)),
+            SizedBox(
+              height: 60,
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      sign,
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: displayColor.withAlpha(150)),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '\$$_amountString',
+                      style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: displayColor),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  '\$$_amountString',
-                  style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: displayColor),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 24),
             Row(

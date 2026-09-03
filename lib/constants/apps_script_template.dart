@@ -121,6 +121,11 @@ function setupBudgetSheet() {
   if (defaultSheet) ss.deleteSheet(defaultSheet);
 }
 
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Connected" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -129,16 +134,63 @@ function doPost(e) {
       setupBudgetSheet();
       expenseSheet = ss.getSheetByName("Expenses");
     }
-    const data = JSON.parse(e.postData.contents);
-    const date = data.date || new Date().toISOString().split('T')[0];
-    const category = data.category || "Uncategorized";
-    const amount = parseFloat(data.amount) || 0;
-    const note = data.note || "";
-    const monthKey = date.substring(0, 7);
-    const yearKey = parseInt(date.substring(0, 4));
 
-    expenseSheet.appendRow([date, category, amount, note, monthKey, yearKey]);
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+    // Parse the incoming data safely
+    let payload;
+    try {
+      payload = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid JSON" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 1. Detect and handle test / verification / ping actions
+    const isPing = payload.type === 'ping' || 
+                   payload.action === 'ping' || 
+                   payload.action === 'verify' || 
+                   payload.type === 'verify';
+                   
+    if (isPing) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "pong" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. Wrap/normalize payload into an array to handle both single items and batch lists
+    let items = [];
+    if (Array.isArray(payload)) {
+      items = payload;
+    } else if (payload && typeof payload === 'object') {
+      items = [payload];
+    }
+
+    let rowsAdded = 0;
+
+    for (const item of items) {
+      // 3. Flexibly resolve field aliases for date/timestamp, category/name/title, amount/value, note
+      const rawDate = item.date || item.timestamp || item.dateTime;
+      const date = rawDate ? rawDate.split('T')[0] : new Date().toISOString().split('T')[0];
+      
+      const category = item.category || item.category_name || item.title || item.name || "Uncategorized";
+      
+      const rawAmount = item.amount !== undefined ? item.amount : item.value;
+      const amount = parseFloat(rawAmount) || 0;
+      
+      const note = item.note || "";
+      
+      const monthKey = date.substring(0, 7);
+      const yearKey = parseInt(date.substring(0, 4)) || new Date().getFullYear();
+
+      // 4. Ignore zero-dollar empty verification rows
+      if (amount === 0 && category === "Uncategorized") {
+        continue;
+      }
+
+      // Append row to sheet
+      expenseSheet.appendRow([date, category, amount, note, monthKey, yearKey]);
+      rowsAdded++;
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", rows_added: rowsAdded, message: "Sync complete" }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))

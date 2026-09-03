@@ -12,6 +12,7 @@ class BubbleProvider with ChangeNotifier {
   double _screenHeight = 600.0;
   final DBService _dbService;
   int _expenseCount = 0;
+  int _collisionSoundCount = 0;
 
   List<Bubble> get bubbles => _bubbles;
   double get screenWidth => _screenWidth;
@@ -54,6 +55,7 @@ class BubbleProvider with ChangeNotifier {
   Future<void> loadFromDatabase() async {
     final data = await _dbService.getCategoriesWithMonthlySpend(DateTime.now());
     _expenseCount = await _dbService.getExpenseCount();
+    _collisionSoundCount = 0; // Reset collision sound counter on fresh load
     final random = math.Random();
     
     _bubbles = data.map((map) {
@@ -74,8 +76,8 @@ class BubbleProvider with ChangeNotifier {
         budgetLimit: limit,
         x: x,
         y: y,
-        vx: (random.nextDouble() * 40.0) - 20.0,
-        vy: (random.nextDouble() * 40.0) - 20.0,
+        vx: (random.nextDouble() * 800.0) - 400.0,
+        vy: (random.nextDouble() * 800.0) - 400.0,
         radius: radius,
         colorHex: colorHex,
       );
@@ -105,6 +107,7 @@ class BubbleProvider with ChangeNotifier {
   void onBubbleDragStart(String id) {
     final index = _bubbles.indexWhere((b) => b.id == id);
     if (index == -1) return;
+    _collisionSoundCount = 0; // Reset collision sound counter on user interaction
     _bubbles[index] = _bubbles[index].copyWith(isDragged: true, vx: 0, vy: 0);
     notifyListeners();
   }
@@ -122,6 +125,7 @@ class BubbleProvider with ChangeNotifier {
   void onBubbleDragEnd(String id, math.Point<double> flingVelocity) {
     final index = _bubbles.indexWhere((b) => b.id == id);
     if (index == -1) return;
+    _collisionSoundCount = 0; // Reset collision sound counter on user interaction
     _bubbles[index] = _bubbles[index].copyWith(
       isDragged: false,
       vx: flingVelocity.x,
@@ -132,6 +136,7 @@ class BubbleProvider with ChangeNotifier {
 
   void shuffleBubbles() {
     final random = math.Random();
+    _collisionSoundCount = 0; // Reset collision sound counter on user interaction
     for (int i = 0; i < _bubbles.length; i++) {
       final impulseVx = (random.nextDouble() * 1000.0) - 500.0;
       final impulseVy = (random.nextDouble() * 1000.0) - 500.0;
@@ -187,6 +192,7 @@ class BubbleProvider with ChangeNotifier {
 
     final expenseId = await _dbService.insertExpense(categoryId, amount);
     _expenseCount = await _dbService.getExpenseCount();
+    _collisionSoundCount = 0; // Reset collision sound counter on user interaction
 
     final bubble = _bubbles[index];
     final newSpend = bubble.monthlySpend + amount;
@@ -266,11 +272,17 @@ class BubbleProvider with ChangeNotifier {
         vy = vy * bounceFactor;
       }
 
-      vx *= math.pow(0.96, dt * 60.0);
-      vy *= math.pow(0.96, dt * 60.0);
+      vx *= math.pow(0.93, dt * 60.0);
+      vy *= math.pow(0.93, dt * 60.0);
 
-      vx += (math.Random().nextDouble() - 0.5) * 8.0 * dt;
-      vy += (math.Random().nextDouble() - 0.5) * 8.0 * dt;
+      // Only add Brownian drift if already moving, otherwise settle to a dead stop
+      if (vx.abs() > 3.0 || vy.abs() > 3.0) {
+        vx += (math.Random().nextDouble() - 0.5) * 6.0 * dt;
+        vy += (math.Random().nextDouble() - 0.5) * 6.0 * dt;
+      } else {
+        vx = 0.0;
+        vy = 0.0;
+      }
 
       _bubbles[i] = b.copyWith(x: x, y: y, vx: vx, vy: vy);
     }
@@ -312,10 +324,14 @@ class BubbleProvider with ChangeNotifier {
             final double relativeVelocityNormal = dvx * nx + dvy * ny;
 
             if (relativeVelocityNormal > 120.0) {
-              // Smooth linear mapping from speed [120, 600] to volume [0.10, 0.25]
-              final double normalizedSpeed = (relativeVelocityNormal - 120.0) / 480.0;
-              final double volume = (0.10 + normalizedSpeed * 0.15).clamp(0.10, 0.25);
-              AudioService().playChime(volume: volume);
+              // Hard-cap collision sound to 10 plays per action
+              if (_collisionSoundCount < 10) {
+                _collisionSoundCount++;
+                // Smooth linear mapping from speed [120, 600] to volume [0.10, 0.25]
+                final double normalizedSpeed = (relativeVelocityNormal - 120.0) / 480.0;
+                final double volume = (0.10 + normalizedSpeed * 0.15).clamp(0.10, 0.25);
+                AudioService().playChime(volume: volume);
+              }
             }
 
             if (relativeVelocityNormal > 0 && !b1.isDragged && !b2.isDragged) {
