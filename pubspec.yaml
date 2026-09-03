@@ -124,9 +124,17 @@ flutter_launcher_icons:
     image_path: "assets/icon/app_icon.png"
 
 flutter_native_splash:
-  color: "#0F172A"
-  image: "assets/icon/app_icon.png"
+  # Black, because AppTheme.darkTheme paints scaffoldBackgroundColor black.
+  # The splash's job is to disappear into the first screen, so matching it
+  # removes the visible colour jump at handover (it was navy -> black).
+  color: "#000000"
+  # The transparent foreground, not the full-bleed icon: app_icon.png carries
+  # its own dark square, which would paste a visible rectangle onto the splash
+  # colour instead of letting the orbs float on it.
+  image: "assets/icon/app_icon_foreground.png"
   android_12:
-    image: "assets/icon/app_icon.png"
-    icon_background_color: "#0F172A"
+    # Android 12+ renders the launch icon inside a masked circle, so it needs
+    # the same transparent artwork and the same safe zone as the adaptive icon.
+    image: "assets/icon/app_icon_foreground.png"
+    icon_background_color: "#0A1819"
   web: false
