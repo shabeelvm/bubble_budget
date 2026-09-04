@@ -8,7 +8,7 @@
 PRODUCT_NAME = bubble_budget
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.bubbleBudget
+PRODUCT_BUNDLE_IDENTIFIER = neerzan.interactive.bubblebudget
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 neerzan.interactive. All rights reserved.

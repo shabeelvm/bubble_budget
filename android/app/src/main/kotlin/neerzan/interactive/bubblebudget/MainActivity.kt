@@ -1,4 +1,4 @@
-package com.example.bubble_budget
+package neerzan.interactive.bubblebudget
 
 import io.flutter.embedding.android.FlutterActivity
 
