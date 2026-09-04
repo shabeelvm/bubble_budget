@@ -176,3 +176,77 @@ final allBudgeted = provider.bubbles.isNotEmpty &&
 ### Why it is still open
 It changes a display conditional in `main.dart` and was explicitly held back
 from the presentational batch. One approval away.
+
+---
+
+## BL-006 — Currency picker: row + bottom-sheet panel
+
+**Status:** Designed and agreed 2026-09-04. Not implemented.
+**Reference mock:** `lib/dev/proposed_currency_panel.dart` (dev-only, never shipped)
+**Scope:** `settings_screen.dart`, plus a decimals map. Feature, not polish.
+
+### The problem
+The picker offers six glyphs — `$ € £ ₹ ¥ A$` — in a `DropdownButton`. That
+excludes most of the world, and `¥` is ambiguous between JPY and CNY.
+
+### Agreed design
+- The Settings row stays a normal `ListTile` showing the current selection
+  (`A$  AUD`) with a chevron. **The panel is not expanded inline** — it opens
+  only on tap, exactly as the dropdown did.
+- Tapping opens a **bottom sheet**, not a dialog. `AlertDialog` insets leave
+  roughly 260 px usable on a 390 pt phone, which fits 3 tiles per row and makes
+  the panel tall and cramped; a sheet is full width and fits 5.
+- Tiles are grouped under three headers — Americas & Europe, Asia-Pacific,
+  Middle East & Africa — with each tile showing the **glyph above its ISO
+  code**. The code is what disambiguates `¥` JPY from `CN¥` CNY, the four
+  Nordic `kr`, and the several `Rs`.
+- 32 currencies. This is deliberately a curated set, not all ~180: a full list
+  needs a searchable picker and implies conversion the app does not do.
+
+### MUST ship with this, not after
+**A decimals map.** JPY, KRW, VND and IDR have no minor unit. The code calls
+`toStringAsFixed(2)` at 16 call sites, so selecting any of them yields
+`¥240.00`, `₩5000.00`, `Rp15000.00`. Four of the 32 are affected.
+
+This bug is **already live**: `¥` is in the current six-symbol picker.
+
+### Known caveats, verified in the mock
+- **Font coverage.** A test render substituted `Rs` for `₨`, and `₹ ₱ ₫ ৳`
+  rendered thin. iOS and Android system fonts should cover these, but verify on
+  both devices before shipping the set.
+- **Wide symbols eat label width.** `CHF`, `Mex$`, `HK$`, `AED` are 3-4 chars.
+  `BubblePainter` clamps labels to `radius * 1.8`, so a small bubble showing
+  `Mex$240.00 / Mex$300.00` will ellipsize.
+- **Arabic glyphs avoided on purpose.** `SR` and `AED` are used rather than
+  `﷼` and `د.إ`, which can render with unexpected directionality inside an
+  LTR `Text`.
+
+### Open question
+The mock keeps the sheet open on selection so several can be compared. A
+shipping version probably closes on tap. One-line difference; decide from use.
+
+---
+
+## BL-007 — Sheets export ignores the currency setting entirely
+
+**Status:** Open (found 2026-09-04 while specifying BL-006)
+**Scope:** `lib/constants/apps_script_template.dart`, `lib/services/sync_service.dart`
+
+Two independent defects that together mean synced data is always
+dollar-formatted regardless of what the user picked:
+
+1. The Apps Script template hard-codes the number format `"$#,##0.00"` in
+   **five** places (lines 21, 51, 65, 79, 97). The spreadsheet renders every
+   amount with a dollar sign whatever the app is set to.
+2. `sync_service.dart:119` sends `'currency': _settings.currencySymbol` — the
+   **glyph**, not an ISO code. So even a corrected template could not choose a
+   format, because `₹` does not identify a currency unambiguously.
+
+### Why it matters
+Google Sheets sync is one of the app's two headline features, and the export is
+where a non-AUD user would most notice the app does not respect their setting.
+
+### Proposed
+Store and send an ISO 4217 code (`INR`), and have the template set its number
+format from it. This overlaps with the model change sketched in BL-006 — worth
+doing together rather than twice.

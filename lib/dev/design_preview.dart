@@ -33,6 +33,7 @@ import '../theme/app_theme.dart';
 import '../widgets/bubble_canvas.dart';
 import '../widgets/quick_entry_modal.dart';
 import 'proposed_canvas.dart';
+import 'proposed_currency_panel.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -123,7 +124,7 @@ const List<DevicePreset> kDevices = <DevicePreset>[
   DevicePreset('Small Android', 360, 740, 24, 24, 20),
 ];
 
-enum PreviewScreen { privacy, welcome, canvas, settings, reports, manage, quickEntry, canvasRedo }
+enum PreviewScreen { privacy, welcome, canvas, settings, reports, manage, quickEntry, canvasRedo, currency }
 
 enum ThemeChoice { light, dark, both }
 
@@ -237,6 +238,8 @@ class _PreviewShellState extends State<PreviewShell> {
         return 'Quick entry';
       case PreviewScreen.canvasRedo:
         return 'Canvas v2';
+      case PreviewScreen.currency:
+        return 'Currency';
     }
   }
 
@@ -597,6 +600,8 @@ class _PreviewShellState extends State<PreviewShell> {
         );
       case PreviewScreen.quickEntry:
         return const _QuickEntryPreview();
+      case PreviewScreen.currency:
+        return const ProposedCurrencyPanel();
       case PreviewScreen.canvasRedo:
         // Static mock from lib/dev/proposed_canvas.dart. Touches nothing real.
         return ProposedCanvasScreen(
