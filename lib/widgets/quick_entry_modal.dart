@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bubble.dart';
 import '../services/audio_service.dart';
+import '../theme/app_theme.dart';
 
 class QuickEntryModal extends StatefulWidget {
   final Bubble bubble;
@@ -17,6 +18,15 @@ class QuickEntryModal extends StatefulWidget {
 }
 
 class _QuickEntryModalState extends State<QuickEntryModal> {
+  // This sheet paints itself #1A1A1A in both app themes, so it is dark by
+  // design. Pinning the dark theme makes that honest: Material components
+  // inside it (ActionChip above all) resolve their defaults against the dark
+  // ColorScheme instead of the ambient one. Without this, the chips took a
+  // near-white Material 3 default in Soft Light and their white labels
+  // vanished, while the neighbouring plain-Material keypad was unaffected.
+  // Built once, not per frame.
+  static final ThemeData _theme = AppTheme.darkTheme;
+
   String _amountString = '0';
   bool _isNegative = false;
   final AudioService _audio = AudioService();
@@ -124,7 +134,9 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
     final displayColor = _isNegative ? Colors.tealAccent : Colors.blueAccent;
     final sign = _isNegative ? '-' : '+';
 
-    return Container(
+    return Theme(
+      data: _theme,
+      child: Container(
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: Color(0xFF1A1A1A),
@@ -213,6 +225,7 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

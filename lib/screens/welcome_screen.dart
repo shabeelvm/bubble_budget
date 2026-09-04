@@ -30,25 +30,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   static const Color _textPrimary = Colors.white;
   static const Color _textSecondary = Colors.white70;
   static const Color _textTertiary = Color(0x99FFFFFF);
-  // Cream fill (the same value as AppTheme.lightBg) carrying the app's charcoal
-  // label: 13.2:1. On this screen the orb owns all the colour and the button
-  // owns all the brightness, so the two never compete for the eye.
-  static const Color _ctaFill = Color(0xFFF5F3EF);
-  static const Color _ctaLabel = Color(0xFF1F2937);
+  // The same fill the privacy screen's CTA uses, so onboarding closes on the
+  // note it opened on. White on it is 5.1:1. (This was cream while the orb was
+  // coral - "orb owns colour, button owns brightness" - but that argument died
+  // when the orb became violet.)
+  static const Color _ctaFill = Color(0xFF2563EB);
+  static const Color _ctaLabel = Colors.white;
 
   static const SystemUiOverlayStyle _overlay = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: Color(0xFF070B0B),
+    systemNavigationBarColor: Color(0xFF000000),
     systemNavigationBarIconBrightness: Brightness.light,
   );
 
-  static const RadialGradient _backgroundGradient = RadialGradient(
-    center: Alignment.center,
-    radius: 1.2,
-    colors: [Color(0xFF0F2626), Color(0xFF070B0B)],
-  );
+  // Pure black, matching AppTheme.darkTheme's scaffoldBackgroundColor and the
+  // privacy screen before it, so the two onboarding screens read as one space.
+  // The teal-black gradient this replaces was chosen as coral's complement;
+  // with a violet orb it only cast a green tint. The orb's own violet bloom
+  // supplies the atmosphere.
+  static const Color _ground = Color(0xFF000000);
 
   @override
   void initState() {
@@ -152,8 +154,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: _overlay,
         child: Scaffold(
-          body: DecoratedBox(
-            decoration: const BoxDecoration(gradient: _backgroundGradient),
+          body: ColoredBox(
+            color: _ground,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -217,12 +219,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       curve: Curves.easeOut,
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        // Emerald, not the old teal: teal was
+                                        // chosen to match a teal CTA and a
+                                        // teal-black ground, and both are gone.
+                                        // White on #047857 is 5.5:1.
                                         decoration: const BoxDecoration(
-                                          color: Color(0xF00F766E),
+                                          color: Color(0xFF047857),
                                           borderRadius: BorderRadius.all(Radius.circular(999)),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Color(0x590F766E),
+                                              color: Color(0x66047857),
                                               blurRadius: 16,
                                               offset: Offset(0, 6),
                                             ),
@@ -308,7 +314,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               borderRadius: BorderRadius.all(Radius.circular(30)),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Color(0x33F5F3EF),
+                                  color: Color(0x522563EB),
                                   blurRadius: 18,
                                   offset: Offset(0, 6),
                                 ),

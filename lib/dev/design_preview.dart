@@ -20,6 +20,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/bubble.dart';
 import '../providers/bubble_provider.dart';
 import '../screens/category_screen.dart';
 import '../screens/privacy_onboarding_screen.dart';
@@ -30,6 +31,7 @@ import '../services/db_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_canvas.dart';
+import '../widgets/quick_entry_modal.dart';
 import 'proposed_canvas.dart';
 
 void main() async {
@@ -121,7 +123,7 @@ const List<DevicePreset> kDevices = <DevicePreset>[
   DevicePreset('Small Android', 360, 740, 24, 24, 20),
 ];
 
-enum PreviewScreen { privacy, welcome, canvas, settings, reports, manage, canvasRedo }
+enum PreviewScreen { privacy, welcome, canvas, settings, reports, manage, quickEntry, canvasRedo }
 
 enum ThemeChoice { light, dark, both }
 
@@ -231,6 +233,8 @@ class _PreviewShellState extends State<PreviewShell> {
         return 'Reports';
       case PreviewScreen.manage:
         return 'Manage';
+      case PreviewScreen.quickEntry:
+        return 'Quick entry';
       case PreviewScreen.canvasRedo:
         return 'Canvas v2';
     }
@@ -591,6 +595,8 @@ class _PreviewShellState extends State<PreviewShell> {
           value: dark ? _providerDark : _providerLight,
           child: const CategoryManagementScreen(),
         );
+      case PreviewScreen.quickEntry:
+        return const _QuickEntryPreview();
       case PreviewScreen.canvasRedo:
         // Static mock from lib/dev/proposed_canvas.dart. Touches nothing real.
         return ProposedCanvasScreen(
@@ -632,4 +638,82 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GridPainter oldDelegate) => false;
+}
+
+
+// Opens the real QuickEntryModal through showModalBottomSheet with exactly the
+// arguments main.dart uses, so the Material ancestry and ambient theme the
+// chips resolve against are the same as in the app.
+class _QuickEntryPreview extends StatefulWidget {
+  const _QuickEntryPreview();
+
+  @override
+  State<_QuickEntryPreview> createState() => _QuickEntryPreviewState();
+}
+
+class _QuickEntryPreviewState extends State<_QuickEntryPreview> {
+  static const Bubble _sample = Bubble(
+    id: 'dining',
+    categoryName: 'Food & Dining',
+    monthlySpend: 240.0,
+    budgetLimit: 0.0,
+    x: 0,
+    y: 0,
+    radius: 90,
+    colorHex: 'FFFF5722',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _open());
+  }
+
+  void _open() {
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext _) => QuickEntryModal(
+        bubble: _sample,
+        onDone: (double _) {},
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      // Two renderings on purpose. The inline one always shows, so the colours
+      // can be judged even if the sheet route misbehaves. The sheet is the
+      // faithful one - it sits in the Navigator's Overlay, above the Scaffold's
+      // Material, which is exactly where the app puts it and may well be what
+      // decides how the chips resolve.
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: Center(
+              child: TextButton(
+                onPressed: _open,
+                child: const Text('Open as real bottom sheet'),
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text(
+              'inline copy below',
+              style: TextStyle(fontSize: 11, color: Color(0xFF8B939D)),
+            ),
+          ),
+          QuickEntryModal(bubble: _sample, onDone: _noop),
+        ],
+      ),
+    );
+  }
+
+  static void _noop(double _) {}
 }

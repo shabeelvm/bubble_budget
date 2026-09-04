@@ -45,9 +45,17 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BubbleProvider>();
-    
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
+    final textSecondary = isDark ? Colors.white70 : const Color(0xFF4B5563);
+    final textMuted = isDark ? Colors.white54 : const Color(0xFF6B7280);
+    final accent = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      // Was hard-coded Colors.black, which left this page dark while the rest
+      // of the app followed Soft Light.
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Manage Bubbles'),
         backgroundColor: Colors.transparent,
@@ -55,7 +63,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildSection('Categories (${provider.bubbles.length}/25)', [
+          _buildSection('Categories (${provider.bubbles.length}/25)', accent, [
             ...provider.bubbles.map((cat) => ListTile(
               leading: Container(
                 width: 24,
@@ -65,22 +73,22 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                   shape: BoxShape.circle,
                 ),
               ),
-              title: Text(cat.categoryName, style: const TextStyle(color: Colors.white)),
+              title: Text(cat.categoryName, style: TextStyle(color: textPrimary)),
               subtitle: Text(
                 cat.budgetLimit > 0
                     ? 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)} / ${_settings.currencySymbol}${cat.budgetLimit.toStringAsFixed(2)}'
                     : 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)}',
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(color: textSecondary),
               ),
-              trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+              trailing: Icon(Icons.chevron_right, color: textMuted),
               onTap: () => _showCategoryDialog(bubble: cat),
             )),
             if (provider.bubbles.length < 25)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: TextButton.icon(
-                  icon: const Icon(Icons.add, color: Colors.blueAccent),
-                  label: const Text('Add Custom Category', style: TextStyle(color: Colors.blueAccent)),
+                  icon: Icon(Icons.add, color: accent),
+                  label: Text('Add Custom Category', style: TextStyle(color: accent)),
                   onPressed: () => _showCategoryDialog(),
                 ),
               ),
@@ -90,11 +98,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     );
   }
 
-  Widget _buildSection(String title, List<Widget> children) {
+  Widget _buildSection(String title, Color accent, List<Widget> children) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+        // blueAccent measured 3.0:1 on the cream ground - below AA.
+        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: accent)),
         const SizedBox(height: 16),
         ...children,
       ],
@@ -116,9 +125,20 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: Text(bubble == null ? 'Add Category' : 'Edit ${bubble.categoryName}', style: const TextStyle(color: Colors.white)),
+        builder: (context, setDialogState) {
+          final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
+          final textPrimary = isDark ? Colors.white : const Color(0xFF1F2937);
+          final textSecondary = isDark ? Colors.white70 : const Color(0xFF4B5563);
+          final accent = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+          final danger = isDark ? const Color(0xFFFF6B6B) : const Color(0xFFDC2626);
+
+          return AlertDialog(
+          // Surface comes from dialogTheme now. It was pinned to #1A1A1A, which
+          // is what put white-on-white text in Soft Light: the hard-coded dark
+          // surface stayed dark while the TextField took filled:true and
+          // fillColor:#FFFFFF from lightTheme.inputDecorationTheme.
+          title: Text(bubble == null ? 'Add Category' : 'Edit ${bubble.categoryName}', style: TextStyle(color: textPrimary)),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -126,20 +146,23 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
-                    controller: nameController, 
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(labelText: 'Category Name', labelStyle: TextStyle(color: Colors.white70)),
+                    controller: nameController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Category Name',
+                      labelStyle: TextStyle(color: textSecondary),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
-                    title: const Text('Set Monthly Budget', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    title: Text('Set Monthly Budget', style: TextStyle(color: textPrimary, fontSize: 14)),
                     value: isBudgetToggled,
                     onChanged: (val) {
                       setDialogState(() {
                         isBudgetToggled = val;
                       });
                     },
-                    activeThumbColor: Colors.blueAccent,
+                    activeThumbColor: accent,
                     contentPadding: EdgeInsets.zero,
                   ),
                   if (isBudgetToggled) ...[
@@ -147,17 +170,17 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     TextField(
                       controller: limitController, 
                       keyboardType: TextInputType.number, 
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
-                        labelText: 'Monthly Budget Limit', 
-                        labelStyle: TextStyle(color: Colors.white70),
+                      style: TextStyle(color: textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Monthly Budget Limit',
+                        labelStyle: TextStyle(color: textSecondary),
                         helperText: 'Enter target amount',
-                        helperStyle: TextStyle(color: Colors.white54),
+                        helperStyle: TextStyle(color: textSecondary),
                       ),
                     ),
                   ],
                   const SizedBox(height: 20),
-                  const Text('Pick Color', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Pick Color', style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -172,7 +195,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                           color: Color(int.parse(color, radix: 16)),
                           shape: BoxShape.circle,
                           border: selectedColor == color
-                              ? Border.all(color: Colors.white, width: 3)
+                              ? Border.all(color: textPrimary, width: 3)
                               : null,
                         ),
                         child: selectedColor == color
@@ -194,9 +217,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                   await provider.deleteCategory(bubble.id);
                   navigator.pop();
                 },
-                child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+                child: Text('Delete', style: TextStyle(color: danger)),
               ),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: textSecondary))),
             TextButton(
               onPressed: () async {
                 final name = nameController.text.trim();
@@ -224,10 +247,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                   navigator.pop();
                 }
               },
-              child: Text(bubble == null ? 'Add' : 'Save', style: const TextStyle(color: Colors.blueAccent)),
+              child: Text(bubble == null ? 'Add' : 'Save', style: TextStyle(color: accent)),
             ),
           ],
-        ),
+          );
+        },
       ),
     );
   }
