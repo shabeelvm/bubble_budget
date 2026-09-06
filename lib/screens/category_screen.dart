@@ -76,8 +76,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               title: Text(cat.categoryName, style: TextStyle(color: textPrimary)),
               subtitle: Text(
                 cat.budgetLimit > 0
-                    ? 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)} / ${_settings.currencySymbol}${cat.budgetLimit.toStringAsFixed(2)}'
-                    : 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(2)}',
+                    ? 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(_settings.currencyDecimals)} / ${_settings.currencySymbol}${cat.budgetLimit.toStringAsFixed(_settings.currencyDecimals)}'
+                    : 'Spent: ${_settings.currencySymbol}${cat.monthlySpend.toStringAsFixed(_settings.currencyDecimals)}',
                 style: TextStyle(color: textSecondary),
               ),
               trailing: Icon(Icons.chevron_right, color: textMuted),

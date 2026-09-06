@@ -296,8 +296,8 @@ class BubblePainter extends CustomPainter {
     final settings = SettingsService();
     textPainter.text = TextSpan(
       text: bubble.isBudgeted
-          ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(2)}'
-          : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(2)}',
+          ? '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(settings.currencyDecimals)} / ${settings.currencySymbol}${bubble.budgetLimit.toStringAsFixed(settings.currencyDecimals)}'
+          : '${settings.currencySymbol}${bubble.monthlySpend.toStringAsFixed(settings.currencyDecimals)}',
       style: TextStyle(
         color: Colors.white.withAlpha(235),
         fontSize: (currentRadius * 0.17).clamp(9.0, 15.0),

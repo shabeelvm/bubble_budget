@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../constants/currencies.dart';
 
 class SettingsService {
   static final SettingsService _instance = SettingsService._internal();
@@ -113,6 +114,23 @@ class SettingsService {
   // Existing plaintext configurations (SharedPreferences)
   String get currencySymbol => _prefs.getString('currencySymbol') ?? '\$';
   set currencySymbol(String value) => _prefs.setString('currencySymbol', value);
+
+  /// ISO 4217 code for the selected currency. Empty on installs from before the
+  /// picker existed; currencyForCode() falls back to USD, so decimals stay 2 -
+  /// which is what those installs were already getting.
+  String get currencyCode => _prefs.getString('currencyCode') ?? '';
+  set currencyCode(String value) => _prefs.setString('currencyCode', value);
+
+  /// Minor-unit digits for the selected currency. 0 for JPY, KRW, VND and IDR;
+  /// without this they render as "¥240.00", which is wrong.
+  int get currencyDecimals => currencyForCode(currencyCode).decimals;
+
+  /// Sets both halves together. The symbol stays the stored display value so
+  /// existing sync and CSV export keep working unchanged.
+  void setCurrency(Currency currency) {
+    currencySymbol = currency.symbol;
+    currencyCode = currency.code;
+  }
 
   bool get soundEnabled => _prefs.getBool('soundEnabled') ?? true;
   set soundEnabled(bool value) => _prefs.setBool('soundEnabled', value);

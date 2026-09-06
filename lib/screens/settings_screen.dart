@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/bubble_provider.dart';
 import '../services/settings_service.dart';
 import '../services/export_service.dart';
+import '../constants/currencies.dart';
+import '../widgets/currency_picker_sheet.dart';
 import 'google_sheets_sync_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -57,9 +59,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           const SizedBox(height: 24),
           _buildSection('Preferences', [
-            _buildDropdownTile('Currency Symbol', _settings.currencySymbol, ['\$', '€', '£', '₹', '¥', 'A\$'], (val) {
-              setState(() => _settings.currencySymbol = val!);
-            }),
+            // Was a 6-item DropdownButton. The panel opens on tap rather than
+            // sitting expanded, so Settings keeps its shape.
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Currency'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_settings.currencySymbol}  ${currencyForCode(_settings.currencyCode).code}',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () async {
+                final picked = await showCurrencyPicker(
+                  context,
+                  selectedCode: _settings.currencyCode,
+                );
+                if (picked != null && mounted) {
+                  setState(() => _settings.setCurrency(picked));
+                }
+              },
+            ),
             _buildDropdownTile('App Theme', _getThemeLabel(bubbleProvider.themeMode), ['Dark', 'Soft Light'], (val) {
               if (val == 'Dark') {
                 bubbleProvider.setThemeMode(ThemeMode.dark);

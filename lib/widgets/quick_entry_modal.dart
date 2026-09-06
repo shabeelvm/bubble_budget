@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bubble.dart';
 import '../services/audio_service.dart';
+import '../services/settings_service.dart';
 import '../theme/app_theme.dart';
 
 class QuickEntryModal extends StatefulWidget {
@@ -30,6 +31,9 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
   String _amountString = '0';
   bool _isNegative = false;
   final AudioService _audio = AudioService();
+  // The pad and the quick chips hard-coded a dollar sign, so they showed "$"
+  // and "+$5" no matter what currency was selected.
+  final String _symbol = SettingsService().currencySymbol;
 
   void _handleKeyPress(String key) {
     _audio.triggerHapticLight();
@@ -167,7 +171,7 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '\$$_amountString',
+                      '$_symbol$_amountString',
                       style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: displayColor),
                     ),
                   ],
@@ -184,9 +188,9 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
                   color: _isNegative ? Colors.tealAccent.withAlpha(50) : null,
                   icon: _isNegative ? Icons.remove_circle_outline : Icons.add_circle_outline,
                 ),
-                _QuickChip(label: '+\$5', onTap: () => _addQuick(5)),
-                _QuickChip(label: '+\$10', onTap: () => _addQuick(10)),
-                _QuickChip(label: '+\$25', onTap: () => _addQuick(25)),
+                _QuickChip(label: '+${_symbol}5', onTap: () => _addQuick(5)),
+                _QuickChip(label: '+${_symbol}10', onTap: () => _addQuick(10)),
+                _QuickChip(label: '+${_symbol}25', onTap: () => _addQuick(25)),
               ],
             ),
             const SizedBox(height: 24),
