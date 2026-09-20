@@ -282,6 +282,13 @@ class BubbleProvider with ChangeNotifier {
     }
   }
 
+  /// Overlap smaller than this (in px) is treated as "touching, good enough".
+  /// Correcting a sub-pixel overlap just re-creates it on the next frame.
+  static const double _overlapSlop = 0.5;
+
+  /// Below this speed (px/s) a bubble is considered at rest and is stopped dead.
+  static const double _restSpeed = 3.0;
+
   /// Physics simulation step with Dynamic Elastic Repulsion and boundary damping.
   void updatePhysics(Duration delta) {
     final double dt = delta.inMicroseconds / 1000000.0;
@@ -342,7 +349,9 @@ class BubbleProvider with ChangeNotifier {
           double distance = math.sqrt(dx * dx + dy * dy);
           double minDistance = b1.radius + b2.radius + 2.0;
 
-          if (distance < minDistance) {
+          // Sub-pixel overlaps are left alone: correcting them re-triggers the
+          // same correction next frame and the pair shivers in place forever.
+          if (distance < minDistance - _overlapSlop) {
             if (distance == 0.0) {
               dx = (math.Random().nextDouble() - 0.5) * 2.0;
               dy = (math.Random().nextDouble() - 0.5) * 2.0;
@@ -391,7 +400,7 @@ class BubbleProvider with ChangeNotifier {
                 x: newB2X,
                 y: newB2Y,
                 vx: b2.vx + impulse * nx,
-                vy: b2.vy + impulse * nx,
+                vy: b2.vy + impulse * ny,
               );
             } else {
               _bubbles[i] = b1.copyWith(x: newB1X, y: newB1Y);
@@ -399,6 +408,20 @@ class BubbleProvider with ChangeNotifier {
             }
           }
         }
+      }
+    }
+
+    // 3. Settle pass. The rest check in step 1 runs BEFORE collisions hand out
+    //    fresh impulses, so without this a bubble topped up by a standing
+    //    contact each frame never reaches a dead stop. The dampener gets the
+    //    final say.
+    for (int i = 0; i < _bubbles.length; i++) {
+      final b = _bubbles[i];
+      if (b.isDragged) continue;
+      if (b.vx == 0.0 && b.vy == 0.0) continue;
+      final speed = math.sqrt(b.vx * b.vx + b.vy * b.vy);
+      if (speed < _restSpeed) {
+        _bubbles[i] = b.copyWith(vx: 0.0, vy: 0.0);
       }
     }
 
