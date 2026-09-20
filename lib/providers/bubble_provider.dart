@@ -82,7 +82,9 @@ class BubbleProvider with ChangeNotifier {
         colorHex: colorHex,
       );
     }).toList();
-    
+
+    _applyAreaBudget();
+
     notifyListeners();
   }
 
@@ -153,14 +155,54 @@ class BubbleProvider with ChangeNotifier {
     _screenHeight = height;
     
     // Recalculate radii and clamp coordinates to the new viewport
-    for (int i = 0; i < _bubbles.length; i++) {
-      final b = _bubbles[i];
-      final newRadius = calculateRadius(b.monthlySpend, b.budgetLimit);
-      _bubbles[i] = b.copyWith(radius: newRadius);
-    }
-    
+    _applyAreaBudget();
+
     _clampBubblesToScreen();
     notifyListeners();
+  }
+
+  /// Fraction of the canvas that ALL bubbles together are allowed to cover.
+  ///
+  /// Unequal-circle packing stops being solvable somewhere around 0.70, so
+  /// above that the pairwise separation pass in updatePhysics can never
+  /// converge and bubbles sit permanently intersecting. Lower = more room.
+  /// This is the single knob to tune.
+  static const double _targetPackingDensity = 0.60;
+
+  /// Shrinks every bubble by one shared factor so the total bubble area never
+  /// exceeds [_targetPackingDensity] of the canvas.
+  ///
+  /// [calculateRadius] sizes each bubble from its own spend alone and has no
+  /// idea how many other bubbles exist, so N categories simply add N more
+  /// circles to a fixed canvas. This is the pass that makes the set fit.
+  /// Only ever shrinks - a sparse canvas is left at its natural size.
+  void _applyAreaBudget() {
+    if (_bubbles.isEmpty) return;
+
+    final canvasArea = _screenWidth * _screenHeight;
+    if (canvasArea <= 0) return;
+
+    final natural = List<double>.filled(_bubbles.length, 0.0);
+    double naturalAreaSum = 0.0;
+    for (int i = 0; i < _bubbles.length; i++) {
+      final r = calculateRadius(
+        _bubbles[i].monthlySpend,
+        _bubbles[i].budgetLimit,
+      );
+      natural[i] = r;
+      naturalAreaSum += math.pi * r * r;
+    }
+    if (naturalAreaSum <= 0) return;
+
+    final budget = canvasArea * _targetPackingDensity;
+    final scale = naturalAreaSum <= budget
+        ? 1.0
+        : math.sqrt(budget / naturalAreaSum);
+    if (scale >= 1.0) return;
+
+    for (int i = 0; i < _bubbles.length; i++) {
+      _bubbles[i] = _bubbles[i].copyWith(radius: natural[i] * scale);
+    }
   }
 
   /// Calculates dynamic radius based on spend vs limit.
@@ -196,7 +238,6 @@ class BubbleProvider with ChangeNotifier {
 
     final bubble = _bubbles[index];
     final newSpend = bubble.monthlySpend + amount;
-    final newRadius = calculateRadius(newSpend, bubble.budgetLimit);
 
     final random = math.Random();
     final bumpVx = (random.nextDouble() * 120.0) - 60.0;
@@ -204,10 +245,12 @@ class BubbleProvider with ChangeNotifier {
 
     _bubbles[index] = bubble.copyWith(
       monthlySpend: newSpend,
-      radius: newRadius,
       vx: bubble.vx + bumpVx,
       vy: bubble.vy + bumpVy,
     );
+
+    // Re-fit the whole set: this bubble grew, so everything may need to shrink.
+    _applyAreaBudget();
 
     notifyListeners();
 
