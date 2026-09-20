@@ -65,7 +65,9 @@ class BubbleProvider with ChangeNotifier {
       final spend = (map['monthly_spend'] as num?)?.toDouble() ?? 0.0;
       final colorHex = map['color_hex'] as String? ?? 'FF448AFF';
       
-      final radius = calculateRadius(spend, limit);
+      // Placeholder radius; _applyAreaBudget() sizes the whole set below,
+      // once every bubble's spend is known.
+      final radius = calculateRadius(spend, spend);
       final x = radius + random.nextDouble() * (_screenWidth - radius * 2);
       final y = radius + random.nextDouble() * (_screenHeight - radius * 2);
 
@@ -161,6 +163,15 @@ class BubbleProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Largest:smallest radius ratio allowed on one canvas. Without a cap, a
+  /// 500x spend spread would shrink the smallest bubble below a usable tap
+  /// target. Higher = more dramatic size differences.
+  static const double _maxRadiusRatio = 3.5;
+
+  /// Hard ceiling on any single bubble, as a fraction of the canvas's shorter
+  /// side. Stops a lone category from filling the screen.
+  static const double _maxRadiusFraction = 0.42;
+
   /// Fraction of the canvas that ALL bubbles together are allowed to cover.
   ///
   /// Unequal-circle packing stops being solvable somewhere around 0.70, so
@@ -172,55 +183,73 @@ class BubbleProvider with ChangeNotifier {
   /// Shrinks every bubble by one shared factor so the total bubble area never
   /// exceeds [_targetPackingDensity] of the canvas.
   ///
-  /// [calculateRadius] sizes each bubble from its own spend alone and has no
-  /// idea how many other bubbles exist, so N categories simply add N more
-  /// circles to a fixed canvas. This is the pass that makes the set fit.
-  /// Only ever shrinks - a sparse canvas is left at its natural size.
+  /// [calculateRadius] returns relative weights, so this pass turns them into
+  /// real radii: it scales the whole set by one shared factor until the total
+  /// bubble area equals [_targetPackingDensity] of the canvas. Relative sizes
+  /// are preserved exactly.
+  ///
+  /// Scales BOTH ways. Shrinking stops a crowded canvas from overflowing;
+  /// growing stops a sparse one from looking empty. The only thing that
+  /// overrides the target is [_maxRadiusFraction].
   void _applyAreaBudget() {
     if (_bubbles.isEmpty) return;
 
     final canvasArea = _screenWidth * _screenHeight;
     if (canvasArea <= 0) return;
 
+    double maxSpend = 0.0;
+    for (final b in _bubbles) {
+      if (b.monthlySpend > maxSpend) maxSpend = b.monthlySpend;
+    }
+
     final natural = List<double>.filled(_bubbles.length, 0.0);
     double naturalAreaSum = 0.0;
+    double largest = 0.0;
     for (int i = 0; i < _bubbles.length; i++) {
-      final r = calculateRadius(
-        _bubbles[i].monthlySpend,
-        _bubbles[i].budgetLimit,
-      );
+      final r = calculateRadius(_bubbles[i].monthlySpend, maxSpend);
       natural[i] = r;
       naturalAreaSum += math.pi * r * r;
+      if (r > largest) largest = r;
     }
-    if (naturalAreaSum <= 0) return;
+    if (naturalAreaSum <= 0 || largest <= 0) return;
 
-    final budget = canvasArea * _targetPackingDensity;
-    final scale = naturalAreaSum <= budget
-        ? 1.0
-        : math.sqrt(budget / naturalAreaSum);
-    if (scale >= 1.0) return;
+    double scale = math.sqrt((canvasArea * _targetPackingDensity) / naturalAreaSum);
+
+    final maxAllowed =
+        math.min(_screenWidth, _screenHeight) * _maxRadiusFraction;
+    if (largest * scale > maxAllowed) scale = maxAllowed / largest;
 
     for (int i = 0; i < _bubbles.length; i++) {
       _bubbles[i] = _bubbles[i].copyWith(radius: natural[i] * scale);
     }
   }
 
-  /// Calculates dynamic radius based on spend vs limit.
-  double calculateRadius(double spend, double limit) {
+  /// Nominal radius for [spend], measured against [maxSpend] - the largest
+  /// spend currently on the canvas.
+  ///
+  /// AREA tracks spend (hence the sqrt), because the eye reads a circle by its
+  /// area, not its radius. The result is floored at 1/[_maxRadiusRatio] of full
+  /// size so a near-empty category stays big enough to tap.
+  ///
+  /// The budget limit deliberately plays no part. Size means "how much was
+  /// spent"; budget status is carried by the ring colour. One visual property,
+  /// one meaning - otherwise \$50 against a \$1000 limit and \$500 against a
+  /// \$10000 limit render identically despite being 10x apart.
+  ///
+  /// This returns the size BEFORE [_applyAreaBudget] fits the set to the
+  /// canvas, so treat it as a relative weight rather than a final radius.
+  double calculateRadius(double spend, double maxSpend) {
     final viewportArea = _screenWidth * _screenHeight;
-    final baseDynamicRadius = viewportArea > 0 
-        ? (math.sqrt(viewportArea) * 0.125).clamp(70.0, 130.0)
-        : 80.0;
+    final nominal = viewportArea > 0
+        ? (math.sqrt(viewportArea) * 0.125).clamp(70.0, 130.0) * 1.6
+        : 128.0;
 
-    if (limit <= 0) {
-      // Unbudgeted/Flexible scaling logic:
-      final radius = baseDynamicRadius + math.sqrt(spend) * 2.5; 
-      return radius.clamp(baseDynamicRadius, baseDynamicRadius * 1.6);
-    }
+    final floor = 1.0 / _maxRadiusRatio;
+    if (maxSpend <= 0.0) return nominal * floor;
 
-    final ratio = spend / limit;
-    final radius = baseDynamicRadius + (ratio * (baseDynamicRadius * 0.6));
-    return radius.clamp(baseDynamicRadius * 0.7, baseDynamicRadius * 1.6);
+    final t = (spend / maxSpend).clamp(0.0, 1.0);
+    final rel = floor + (1.0 - floor) * math.sqrt(t);
+    return nominal * rel;
   }
 
   /// Logs an expense, persists it to DB, and updates local state.

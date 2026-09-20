@@ -119,17 +119,47 @@ void main() {
       expect(newVelocities, isNot(equals(originalVelocities)));
     });
 
-    test('calculateRadius handles zero or negative budget limit', () {
+    test('calculateRadius sizes by spend relative to the largest spend', () {
       final provider = BubbleProvider(dbService: mockDb);
-      
-      // Budgeted (ratio 0.5) => 70 + 0.5 * (70 * 0.6) = 91.0
-      expect(provider.calculateRadius(50.0, 100.0), closeTo(91.0, 0.01));
 
-      // Unbudgeted (limit 0) => base (70.0) + sqrt(50) * 2.5 ≈ 87.68
-      expect(provider.calculateRadius(50.0, 0.0), closeTo(87.68, 0.01));
+      // Default viewport 375x600 => nominal radius 112.0,
+      // floor = 112 / _maxRadiusRatio(3.5) = 32.0.
 
-      // Unbudgeted (limit -1) => base (70.0) + sqrt(100) * 2.5 = 95.0
-      expect(provider.calculateRadius(100.0, -1.0), 95.0);
+      // The biggest spender gets the full nominal radius.
+      expect(provider.calculateRadius(100.0, 100.0), closeTo(112.0, 0.01));
+
+      // Area tracks spend, so radius tracks sqrt: half the spend of the
+      // largest => floor + (112 - 32) * sqrt(0.5).
+      expect(provider.calculateRadius(50.0, 100.0), closeTo(88.5685, 0.01));
+
+      // A quarter of the largest spend => exactly half the variable range.
+      expect(provider.calculateRadius(25.0, 100.0), closeTo(72.0, 0.01));
+
+      // Zero spend floors rather than vanishing, so it stays tappable.
+      expect(provider.calculateRadius(0.0, 100.0), closeTo(32.0, 0.01));
+
+      // Refunds can push a category negative; it floors too, never inverts.
+      expect(provider.calculateRadius(-5.0, 100.0), closeTo(32.0, 0.01));
+
+      // An empty canvas (no spend anywhere) puts every bubble on the floor.
+      expect(provider.calculateRadius(50.0, 0.0), closeTo(32.0, 0.01));
+
+      // The ratio between biggest and smallest never exceeds _maxRadiusRatio.
+      expect(
+        provider.calculateRadius(100.0, 100.0) /
+            provider.calculateRadius(0.0, 100.0),
+        closeTo(3.5, 0.01),
+      );
+    });
+
+    test('calculateRadius ignores the budget limit entirely', () {
+      final provider = BubbleProvider(dbService: mockDb);
+
+      // Size means spend. \$50 against a \$1000 limit must be SMALLER than
+      // \$60 against a \$100 limit, even though it uses far less of its budget.
+      final smallSpend = provider.calculateRadius(50.0, 60.0);
+      final largeSpend = provider.calculateRadius(60.0, 60.0);
+      expect(smallSpend, lessThan(largeSpend));
     });
   });
 }
