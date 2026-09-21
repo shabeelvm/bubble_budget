@@ -169,8 +169,11 @@ class BubbleProvider with ChangeNotifier {
   static const double _maxRadiusRatio = 3.5;
 
   /// Hard ceiling on any single bubble, as a fraction of the canvas's shorter
-  /// side. Stops a lone category from filling the screen.
-  static const double _maxRadiusFraction = 0.42;
+  /// side. Stops a lone category from filling the screen: at 0.34 the widest a
+  /// bubble can get is about two thirds of the shorter side, which still leaves
+  /// it room to drift. Higher values produce a bubble that is effectively a
+  /// wall - 0.42 gave a diameter of 84% of the screen width.
+  static const double _maxRadiusFraction = 0.34;
 
   /// Fraction of the canvas that ALL bubbles together are allowed to cover.
   ///

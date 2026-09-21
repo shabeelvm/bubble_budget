@@ -97,9 +97,13 @@ void main() {
       expect(provider.bubbles[0].isDragged, isTrue);
       expect(provider.bubbles[0].vx, 0);
       
-      provider.onBubbleDragUpdate(bubbleId, const math.Point(100.0, 100.0));
-      expect(provider.bubbles[0].x, 100.0);
-      expect(provider.bubbles[0].y, 100.0);
+      // Drag to the canvas centre. onBubbleDragUpdate clamps to
+      // [radius, size - radius], so a point near the edge would assert against
+      // whatever the current sizing rule produces and break on every sizing
+      // change. The centre is valid at any radius.
+      provider.onBubbleDragUpdate(bubbleId, const math.Point(187.5, 300.0));
+      expect(provider.bubbles[0].x, 187.5);
+      expect(provider.bubbles[0].y, 300.0);
       
       provider.onBubbleDragEnd(bubbleId, const math.Point(500.0, -500.0));
       expect(provider.bubbles[0].isDragged, isFalse);
