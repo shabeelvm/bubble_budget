@@ -28,12 +28,28 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
   // Built once, not per frame.
   static final ThemeData _theme = AppTheme.darkTheme;
 
+  /// The sheet's own near-black, unchanged from before - the tint fades into
+  /// this rather than replacing it.
+  static const Color _sheetGround = Color(0xFF1A1A1A);
+
   String _amountString = '0';
   bool _isNegative = false;
   final AudioService _audio = AudioService();
   // The pad and the quick chips hard-coded a dollar sign, so they showed "$"
   // and "+$5" no matter what currency was selected.
   final String _symbol = SettingsService().currencySymbol;
+
+  /// The category's own colour, so the sheet can carry the same identity the
+  /// bubble does. Falls back to the app blue if the stored hex is malformed.
+  Color get _categoryColor {
+    final hex = widget.bubble.colorHex;
+    try {
+      final value = int.parse(hex, radix: 16);
+      return Color(hex.length == 6 ? (0xFF000000 | value) : value);
+    } catch (_) {
+      return const Color(0xFF2563EB);
+    }
+  }
 
   void _handleKeyPress(String key) {
     _audio.triggerHapticLight();
@@ -142,17 +158,41 @@ class _QuickEntryModalState extends State<QuickEntryModal> {
       data: _theme,
       child: Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        // H: a wash of the category's colour at the top, fading to the sheet's
+        // normal near-black. Colour means identity on the canvas, so the sheet
+        // visibly belongs to the bubble that opened it.
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const <double>[0.0, 0.45],
+          colors: <Color>[
+            Color.lerp(_categoryColor, _sheetGround, 0.78) ?? _sheetGround,
+            _sheetGround,
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              widget.bubble.categoryName,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                // G: the same glass rendering as the canvas, shrunk. Unlike a
+                // flash on tap, this stays put while the amount is typed.
+                _MiniBubble(color: _categoryColor),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    widget.bubble.categoryName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -277,6 +317,60 @@ class _KeyButton extends StatelessWidget {
           child: label != null
               ? Text(label!, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white))
               : Icon(icon, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+/// A 40pt echo of a canvas bubble: radial gradient lit from the upper left,
+/// a specular catch-light, and a thin rim. Same visual language as
+/// BubblePainter, without the physics.
+class _MiniBubble extends StatelessWidget {
+  final Color color;
+
+  const _MiniBubble({required this.color});
+
+  static const double _size = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color glint = Color.lerp(color, Colors.white, 0.50) ?? color;
+    final Color shade = Color.lerp(color, Colors.black, 0.42) ?? color;
+
+    return SizedBox(
+      width: _size,
+      height: _size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.32, -0.38),
+            radius: 0.95,
+            colors: <Color>[glint, color, shade],
+            stops: const <double>[0.0, 0.55, 1.0],
+          ),
+          border: Border.all(color: Colors.white24, width: 1.0),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: color.withAlpha(90),
+              blurRadius: 10.0,
+              offset: const Offset(0.0, 3.0),
+            ),
+          ],
+        ),
+        child: Align(
+          alignment: const Alignment(-0.40, -0.48),
+          child: FractionallySizedBox(
+            widthFactor: 0.34,
+            heightFactor: 0.22,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(66),
+                borderRadius: BorderRadius.circular(_size),
+              ),
+            ),
+          ),
         ),
       ),
     );

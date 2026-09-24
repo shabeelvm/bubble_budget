@@ -18,11 +18,28 @@ class BubbleCanvas extends StatefulWidget {
 }
 
 class _BubbleCanvasState extends State<BubbleCanvas>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
   Duration _lastElapsed = Duration.zero;
   final AudioService _audio = AudioService();
   String? _draggedBubbleId;
+
+  /// Which bubble was poked, where it was poked, and how far through the
+  /// wobble we are. Deliberately widget state, not model state: presentation
+  /// only, never reaches the provider or the database.
+  String? _pressedBubbleId;
+  double _pokeAngle = 0.0;
+  late AnimationController _pokeCtl;
+
+  /// One-shot: the whole arc plays from tap-down regardless of when the finger
+  /// lifts. Tying it to press/release was the bug - a real tap is often
+  /// shorter than the press-in, so the squash never completed and all you saw
+  /// was the tail of the rebound.
+  static const Duration _pokeDuration = Duration(milliseconds: 820);
+
+  /// How long the sheet waits before covering the canvas. Long enough to see
+  /// the dent and the first rebound, short enough not to be friction.
+  static const Duration _pressRevealDelay = Duration(milliseconds: 200);
 
   @override
   void initState() {
@@ -32,11 +49,17 @@ class _BubbleCanvasState extends State<BubbleCanvas>
       duration: const Duration(milliseconds: 1000),
     )..addListener(_updatePhysics);
     _controller.repeat();
+
+    // Drives 0 -> 1 once per poke. The painter reads this raw and shapes it
+    // into two decaying harmonics; no Curve is involved, because the motion we
+    // want is a damped oscillation rather than an eased interpolation.
+    _pokeCtl = AnimationController(vsync: this, duration: _pokeDuration);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _pokeCtl.dispose();
     super.dispose();
   }
 
@@ -64,6 +87,8 @@ class _BubbleCanvasState extends State<BubbleCanvas>
         return Consumer<BubbleProvider>(
           builder: (context, provider, child) {
             return GestureDetector(
+              onTapDown: (details) => _handleTapDown(details, provider),
+              onTapCancel: _handleTapCancel,
               onTapUp: (details) => _handleTap(details, provider),
               onPanStart: (details) => _handlePanStart(details, provider),
               onPanUpdate: (details) => _handlePanUpdate(details, provider),
@@ -73,6 +98,9 @@ class _BubbleCanvasState extends State<BubbleCanvas>
                 painter: BubblePainter(
                   bubbles: provider.bubbles,
                   isDark: Theme.of(context).brightness == Brightness.dark,
+                  pressedBubbleId: _pressedBubbleId,
+                  pokeT: _pokeCtl.value,
+                  pokeAngle: _pokeAngle,
                 ),
               ),
             );
@@ -82,22 +110,49 @@ class _BubbleCanvasState extends State<BubbleCanvas>
     );
   }
 
+  Bubble? _bubbleAt(Offset pos, BubbleProvider provider) {
+    for (final bubble in provider.bubbles) {
+      final dx = pos.dx - bubble.x;
+      final dy = pos.dy - bubble.y;
+      if (math.sqrt(dx * dx + dy * dy) <= bubble.radius) return bubble;
+    }
+    return null;
+  }
+
+  void _handleTapDown(TapDownDetails details, BubbleProvider provider) {
+    if (_draggedBubbleId != null) return;
+
+    final pos = details.localPosition;
+    final bubble = _bubbleAt(pos, provider);
+    if (bubble == null) return;
+
+    // The dent goes where the finger landed, not always downward.
+    _pokeAngle = math.atan2(pos.dy - bubble.y, pos.dx - bubble.x);
+    _pressedBubbleId = bubble.id;
+
+    _audio.triggerHapticLight();
+    _pokeCtl.forward(from: 0.0).whenComplete(() {
+      if (mounted) _pressedBubbleId = null;
+    });
+  }
+
+  void _handleTapCancel() {
+    // The wobble is one-shot and already running; let it finish on its own.
+  }
+
   void _handleTap(TapUpDetails details, BubbleProvider provider) {
     if (_draggedBubbleId != null) return;
 
-    final tapPos = details.localPosition;
-    for (final bubble in provider.bubbles) {
-      final dx = tapPos.dx - bubble.x;
-      final dy = tapPos.dy - bubble.y;
-      final distance = math.sqrt(dx * dx + dy * dy);
+    final bubble = _bubbleAt(details.localPosition, provider);
+    if (bubble == null) return;
 
-      if (distance <= bubble.radius) {
-        _audio.triggerHapticMedium();
-        _audio.playTap();
-        widget.onBubbleTap(bubble);
-        break;
-      }
-    }
+    _audio.triggerHapticMedium();
+    _audio.playTap();
+
+    // Let the dent and first rebound be seen before the sheet covers it.
+    Future.delayed(_pressRevealDelay, () {
+      if (mounted) widget.onBubbleTap(bubble);
+    });
   }
 
   void _handlePanStart(DragStartDetails details, BubbleProvider provider) {
@@ -141,13 +196,135 @@ class BubblePainter extends CustomPainter {
   final List<Bubble> bubbles;
   final bool isDark;
 
-  BubblePainter({required this.bubbles, required this.isDark});
+  /// The poked bubble, how far through the wobble it is (0 -> 1), and the
+  /// angle from its centre to the point the finger landed.
+  final String? pressedBubbleId;
+  final double pokeT;
+  final double pokeAngle;
+
+  BubblePainter({
+    required this.bubbles,
+    required this.isDark,
+    this.pressedBubbleId,
+    this.pokeT = 0.0,
+    this.pokeAngle = 0.0,
+  });
+
+  // ---------------------------------------------------------------------
+  // Surface wobble
+  //
+  // The outline is a sum of two angular harmonics rather than an ellipse.
+  // An ellipse is a single mode and always reads as "squeezed between two
+  // plates"; real liquid deforms locally where it is touched and the wave
+  // travels round the surface. Two modes with different decay rates give
+  // that, because higher modes die faster in any real fluid - which is what
+  // stops the shape from merely scaling.
+  //
+  // Both are cosines of (theta - pokeAngle), so the dent lands under the
+  // finger. Their mean over a full turn is zero, so the enclosed area stays
+  // roughly constant and the bubble does not appear to shrink.
+  // ---------------------------------------------------------------------
+
+  /// Depth of the initial dent, as a fraction of the radius.
+  static const double _wobbleAmplitude = 0.135;
+
+  /// Mode 2 is the broad squash; mode 3 is the asymmetry that keeps it from
+  /// looking like a rotating ellipse.
+  ///
+  /// Mode 3 is driven by SIN, not cos, so it starts at zero and peaks while
+  /// mode 2 is crossing through zero. That phase offset is what makes it
+  /// visible at all: with both on cos and mode 3 decaying fast, mode 3 lived
+  /// for about three frames and was swamped by the much deeper mode-2 dent -
+  /// physically correct, perceptually invisible.
+  ///
+  /// It is also the truer shape. A poke starts as a clean indentation and the
+  /// surface breaks into higher modes as it rebounds, which is what a real
+  /// droplet does.
+  static const double _mode3Ratio = 0.0;
+  static const double _mode2Decay = 4.2;
+  static const double _mode3Decay = 3.0;
+  static const double _mode2Cycles = 1.45;
+  static const double _mode3Cycles = 1.00;
+
+  /// Points around the outline. 72 is smooth at every size the app uses.
+  static const int _wobbleSteps = 72;
+
+  /// The bright rim arc spans this slice of the outline (upper left).
+  static const double _rimArcStartDeg = 195.0;
+  static const double _rimArcSweepDeg = 105.0;
+
+  /// The same wobble outline, but only the rim-arc slice of it. Without this
+  /// the bright arc kept being stroked on a perfect circle while the body
+  /// deformed, leaving a white crescent floating outside the dented bubble -
+  /// obvious against the dark canvas, nearly invisible on the light one.
+  Path _wobbleArcPath(Offset centre, double radius, double t) {
+    final double a2 = _mode2At(t);
+    final double a3 = _mode3At(t);
+
+    final double start = _rimArcStartDeg * math.pi / 180.0;
+    final double sweep = _rimArcSweepDeg * math.pi / 180.0;
+    const int steps = 24;
+
+    final Path path = Path();
+    for (int i = 0; i <= steps; i++) {
+      final double th = start + sweep * i / steps;
+      final double d = th - pokeAngle;
+      final double r =
+          radius * (1.0 - a2 * math.cos(2 * d) - a3 * math.cos(3 * d));
+      final double x = centre.dx + r * math.cos(th);
+      final double y = centre.dy + r * math.sin(th);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    return path;
+  }
+
+  double _mode2At(double t) =>
+      _wobbleAmplitude *
+      math.exp(-_mode2Decay * t) *
+      math.cos(2 * math.pi * _mode2Cycles * t);
+
+  double _mode3At(double t) =>
+      _wobbleAmplitude *
+      _mode3Ratio *
+      math.exp(-_mode3Decay * t) *
+      math.sin(2 * math.pi * _mode3Cycles * t);
+
+  /// Only ever one bubble is poked at a time, so this runs once per frame
+  /// rather than once per bubble.
+  Path _wobblePath(Offset centre, double radius, double t) {
+    final double a2 = _mode2At(t);
+    final double a3 = _mode3At(t);
+
+    final Path path = Path();
+    for (int i = 0; i <= _wobbleSteps; i++) {
+      final double th = 2 * math.pi * i / _wobbleSteps;
+      final double d = th - pokeAngle;
+      final double r =
+          radius * (1.0 - a2 * math.cos(2 * d) - a3 * math.cos(3 * d));
+      final double x = centre.dx + r * math.cos(th);
+      final double y = centre.dy + r * math.sin(th);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    return path;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Sort so dragged bubbles are on top
+    // Sort so dragged and pressed bubbles are on top - a squash hidden under
+    // a neighbour is no confirmation at all.
+    int lift(Bubble b) =>
+        (b.isDragged || b.id == pressedBubbleId) ? 1 : 0;
     final sortedBubbles = List<Bubble>.from(bubbles)
-      ..sort((a, b) => (a.isDragged ? 1 : 0).compareTo(b.isDragged ? 1 : 0));
+      ..sort((a, b) => lift(a).compareTo(lift(b)));
 
     for (final bubble in sortedBubbles) {
       _drawBubble(canvas, bubble, size);
@@ -162,6 +339,12 @@ class BubblePainter extends CustomPainter {
         ? bubble.radius * 1.08
         : bubble.radius;
 
+    // Non-null only while this bubble is mid-wobble. Shadow, body and rim all
+    // follow it so the deformation is of the whole object, not a decal on it.
+    final Path? wobble = (bubble.id == pressedBubbleId && pokeT > 0.0 && pokeT < 1.0)
+        ? _wobblePath(center, currentRadius, pokeT)
+        : null;
+
     // Pass 1: Elevation Shadow (Light mode = soft black shadow, Dark mode = subtle neon ambient colored back-glow to pop against black background!)
     final shadowOffset = Offset(0.0, currentRadius * 0.10);
     final shadowColor = isDark
@@ -170,7 +353,11 @@ class BubblePainter extends CustomPainter {
     final shadowPaint = Paint()
       ..color = shadowColor
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, isDark ? currentRadius * 0.22 : currentRadius * 0.18);
-    canvas.drawCircle(center + shadowOffset, currentRadius, shadowPaint);
+    if (wobble != null) {
+      canvas.drawPath(wobble.shift(shadowOffset), shadowPaint);
+    } else {
+      canvas.drawCircle(center + shadowOffset, currentRadius, shadowPaint);
+    }
 
     // 1. Draw elegant outer status rings if needed
     if (ratio > 1.0) {
@@ -221,7 +408,11 @@ class BubblePainter extends CustomPainter {
       ..shader = bodyGradient.createShader(
         Rect.fromCircle(center: center, radius: currentRadius),
       );
-    canvas.drawCircle(center, currentRadius, bodyPaint);
+    if (wobble != null) {
+      canvas.drawPath(wobble, bodyPaint);
+    } else {
+      canvas.drawCircle(center, currentRadius, bodyPaint);
+    }
 
     // Pass 2b: Specular catch-light. One soft ellipse in the upper-left is the
     // single strongest cue that a shaded circle is a glass sphere.
@@ -244,7 +435,11 @@ class BubblePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
-    canvas.drawCircle(center, currentRadius, rimPaint);
+    if (wobble != null) {
+      canvas.drawPath(wobble, rimPaint);
+    } else {
+      canvas.drawCircle(center, currentRadius, rimPaint);
+    }
 
     // Pass 3b: on real glass the rim is bright where it faces the light and
     // nearly gone on the shaded side. Keep the uniform rim as the base, then
@@ -254,13 +449,17 @@ class BubblePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: currentRadius),
-      math.pi * 195 / 180,
-      math.pi * 105 / 180,
-      false,
-      rimArcPaint,
-    );
+    if (wobble != null) {
+      canvas.drawPath(_wobbleArcPath(center, currentRadius, pokeT), rimArcPaint);
+    } else {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: currentRadius),
+        _rimArcStartDeg * math.pi / 180.0,
+        _rimArcSweepDeg * math.pi / 180.0,
+        false,
+        rimArcPaint,
+      );
+    }
 
     // 3. Category Text
     final textPainter = TextPainter(
