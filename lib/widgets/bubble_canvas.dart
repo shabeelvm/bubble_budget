@@ -295,7 +295,13 @@ class BubblePainter extends CustomPainter {
 
   /// Only ever one bubble is poked at a time, so this runs once per frame
   /// rather than once per bubble.
-  Path _wobblePath(Offset centre, double radius, double t) {
+  ///
+  /// [outset] pushes the outline out by a fixed number of pixels, used by the
+  /// budget status rings. It is added AFTER the harmonics rather than folded
+  /// into the radius, so the ring keeps a constant gap from the surface
+  /// instead of the gap breathing as the bubble deforms.
+  Path _wobblePath(Offset centre, double radius, double t,
+      {double outset = 0.0}) {
     final double a2 = _mode2At(t);
     final double a3 = _mode3At(t);
 
@@ -304,7 +310,8 @@ class BubblePainter extends CustomPainter {
       final double th = 2 * math.pi * i / _wobbleSteps;
       final double d = th - pokeAngle;
       final double r =
-          radius * (1.0 - a2 * math.cos(2 * d) - a3 * math.cos(3 * d));
+          radius * (1.0 - a2 * math.cos(2 * d) - a3 * math.cos(3 * d)) +
+              outset;
       final double x = centre.dx + r * math.cos(th);
       final double y = centre.dy + r * math.sin(th);
       if (i == 0) {
@@ -365,23 +372,37 @@ class BubblePainter extends CustomPainter {
         ..color = const Color(0xFFFF5A5F).withAlpha(200)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.6;
-      canvas.drawCircle(center, currentRadius + 5, ringPaint);
-
       final glowPaint = Paint()
         ..color = const Color(0xFFFF5A5F).withAlpha(62)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 8.0);
-      canvas.drawCircle(center, currentRadius + 6, glowPaint);
+
+      if (wobble != null) {
+        canvas.drawPath(
+            _wobblePath(center, currentRadius, pokeT, outset: 5.0), ringPaint);
+        canvas.drawPath(
+            _wobblePath(center, currentRadius, pokeT, outset: 6.0), glowPaint);
+      } else {
+        canvas.drawCircle(center, currentRadius + 5, ringPaint);
+        canvas.drawCircle(center, currentRadius + 6, glowPaint);
+      }
     } else if (ratio > 0.8) {
       final ringPaint = Paint()
         ..color = const Color(0xFFFBBF24).withAlpha(165)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-      canvas.drawCircle(center, currentRadius + 4, ringPaint);
-
       final glowPaint = Paint()
         ..color = const Color(0xFFFBBF24).withAlpha(46)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 5.0);
-      canvas.drawCircle(center, currentRadius + 4, glowPaint);
+
+      if (wobble != null) {
+        canvas.drawPath(
+            _wobblePath(center, currentRadius, pokeT, outset: 4.0), ringPaint);
+        canvas.drawPath(
+            _wobblePath(center, currentRadius, pokeT, outset: 4.0), glowPaint);
+      } else {
+        canvas.drawCircle(center, currentRadius + 4, ringPaint);
+        canvas.drawCircle(center, currentRadius + 4, glowPaint);
+      }
     }
 
     // Pass 2: Radial Body (Centered at top-left specular glint Alignment(-0.35, -0.35))
